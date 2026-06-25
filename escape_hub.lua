@@ -16,7 +16,11 @@ local Window = Rayfield:CreateWindow({
       FolderName = "CypherXConfig",
       FileName = "EscapeV2"
    },
-   Discord = { Enabled = false },
+   Discord = {
+      Enabled = false,
+      Invite = "noinvitelink", 
+      RememberJoins = true 
+   },
    KeySystem = false,
 })
 
@@ -27,10 +31,12 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
-local VirtualUser = game:GetService("VirtualUser")
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Stats = game:GetService("Stats")
+
+local successVU, VirtualUser = pcall(function() return game:GetService("VirtualUser") end)
+if not successVU then VirtualUser = nil end
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -165,7 +171,7 @@ CombatTab:CreateSlider({Name = "4. Aimbot Prediction", Range = {0, 10}, Incremen
 CombatTab:CreateDropdown({Name = "5. Target Bone Selector", Options = {"Head", "HumanoidRootPart", "Random"}, CurrentOption = {"Head"}, Flag = "AimbotBoneDrop", Callback = function(v) Settings.TargetBone = v[1] end})
 CombatTab:CreateToggle({Name = "6. Team Check", CurrentValue = false, Flag = "TeamCheckToggle", Callback = function(v) Toggles.TeamCheck = v end})
 CombatTab:CreateToggle({Name = "7. Visibility Check", CurrentValue = false, Flag = "VisCheckToggle", Callback = function(v) Toggles.VisibilityCheck = v end})
-CombatTab:CreateInput({Name = "8. Lock Keybind", PlaceholderText = "E", RemoveTextAfterFocusLost = false, Callback = function(t) Settings.LockKeybind = t end})
+CombatTab:CreateInput({Name = "8. Lock Keybind", PlaceholderText = "E", RemoveTextAfterFocusLost = false, Flag = "LockKeybindInput", Callback = function(t) Settings.LockKeybind = t end})
 CombatTab:CreateToggle({Name = "9. Draw FOV", CurrentValue = false, Flag = "DrawFOVToggle", Callback = function(v) Toggles.DrawFOV = v end})
 CombatTab:CreateToggle({Name = "10. Random Aim Offset", CurrentValue = false, Flag = "RandAimToggle", Callback = function(v) Toggles.RandomAimOffset = v end})
 
@@ -320,7 +326,7 @@ Settings.FreecamRot = 1
 VisualProTab:CreateSlider({Name = "66. Custom FOV Slider", Range = {10, 120}, Increment = 1, CurrentValue = 70, Flag = "CusFOVSli", Callback = function(v) Settings.CustomFOV = v end})
 VisualProTab:CreateToggle({Name = "67. FOV Unlock", CurrentValue = false, Flag = "FOVUnlTog", Callback = function(v) Toggles.FOVUnlock = v end})
 VisualProTab:CreateSlider({Name = "68. Zoom Speed Control", Range = {1, 10}, Increment = 0.5, CurrentValue = 1, Flag = "ZoomSli", Callback = function(v) Settings.ZoomSpeed = v end})
-VisualProTab:CreateInput({Name = "69. Camera Offset (x,y,z)", PlaceholderText = "0,0,0", RemoveTextAfterFocusLost = false, Callback = function(t) Settings.CameraOffset = t end})
+VisualProTab:CreateInput({Name = "69. Camera Offset (x,y,z)", PlaceholderText = "0,0,0", RemoveTextAfterFocusLost = false, Flag = "CamOffsetInput", Callback = function(t) Settings.CameraOffset = t end})
 VisualProTab:CreateToggle({Name = "70. Third Person Mode", CurrentValue = false, Flag = "ThirdPTog", Callback = function(v) Toggles.ThirdPerson = v end})
 VisualProTab:CreateSlider({Name = "71. Camera Smoothing", Range = {1, 10}, Increment = 0.1, CurrentValue = 1, Flag = "CamSmoothSli", Callback = function(v) Settings.CamSmooth = v end})
 VisualProTab:CreateToggle({Name = "72. Camera Shake Removal", CurrentValue = false, Flag = "CamShakeTog", Callback = function(v) Toggles.CamShakeRem = v end})
@@ -348,7 +354,7 @@ VisualProTab:CreateSlider({Name = "80. Time Changer", Range = {0, 24}, Increment
 VisualProTab:CreateSlider({Name = "81. Saturation Control", Range = {0, 5}, Increment = 0.1, CurrentValue = 1, Flag = "SatSli", Callback = function(v) Settings.Saturation = v end})
 VisualProTab:CreateSlider({Name = "82. Contrast Control", Range = {0, 5}, Increment = 0.1, CurrentValue = 1, Flag = "ConSli", Callback = function(v) Settings.Contrast = v end})
 VisualProTab:CreateSlider({Name = "83. Bloom Control", Range = {0, 5}, Increment = 0.1, CurrentValue = 1, Flag = "BloomSli", Callback = function(v) Settings.Bloom = v end})
-VisualProTab:CreateInput({Name = "84. Ambient Color Override", PlaceholderText = "255,255,255", RemoveTextAfterFocusLost = false, Callback = function(t) Settings.AmbientColor = t end})
+VisualProTab:CreateInput({Name = "84. Ambient Color Override", PlaceholderText = "255,255,255", RemoveTextAfterFocusLost = false, Flag = "AmbientColorInput", Callback = function(t) Settings.AmbientColor = t end})
 VisualProTab:CreateSlider({Name = "85. Shadow Intensity", Range = {0, 1}, Increment = 0.1, CurrentValue = 1, Flag = "ShadowSli", Callback = function(v) Settings.ShadowInt = v; if Lighting then Lighting.ShadowSoftness = v end end})
 
 --=========================================--
@@ -391,7 +397,7 @@ PlayerModsTab:CreateToggle({Name = "100. Instant Respawn", CurrentValue = false,
 --               WORLD MODS                --
 --=========================================--
 local SectionWorld = WorldModsTab:CreateSection("Environment Interactions")
-Settings.Gravity = workspace.Gravity
+Settings.Gravity = 196
 Settings.GlobalSpeed = 1
 Toggles.RemColGlobal = false
 Toggles.BreakParts = false
@@ -407,7 +413,7 @@ Toggles.MovPlat = false
 Settings.WorldBright = 1
 Toggles.RemTex = false
 
-WorldModsTab:CreateSlider({Name = "101. Gravity Override", Range = {0, 1000}, Increment = 1, CurrentValue = workspace.Gravity, Flag = "GravSli", Callback = function(v) Settings.Gravity = v; workspace.Gravity = v end})
+WorldModsTab:CreateSlider({Name = "101. Gravity Override", Range = {0, 1000}, Increment = 1, CurrentValue = 196, Flag = "GravSli", Callback = function(v) Settings.Gravity = v; workspace.Gravity = v end})
 WorldModsTab:CreateSlider({Name = "102. Global Speed Modifier", Range = {0.1, 10}, Increment = 0.1, CurrentValue = 1, Flag = "GlobSpdSli", Callback = function(v) Settings.GlobalSpeed = v end})
 WorldModsTab:CreateToggle({Name = "103. Remove Collisions (global)", CurrentValue = false, Flag = "RemColTog", Callback = function(v) Toggles.RemColGlobal = v end})
 WorldModsTab:CreateToggle({Name = "104. Break Parts (client)", CurrentValue = false, Flag = "BreakPartTog", Callback = function(v) Toggles.BreakParts = v end})
@@ -449,7 +455,7 @@ TeleportsTab:CreateButton({Name = "116. Save Unlimited Positions", Callback = fu
         Rayfield:Notify({Title="Position Saved", Content=name, Duration=3})
     end
 end})
-TeleportsTab:CreateInput({Name = "117. Named Position Slots", PlaceholderText = "Enter Name and press Enter", RemoveTextAfterFocusLost = false, Callback = function(t) 
+TeleportsTab:CreateInput({Name = "117. Named Position Slots", PlaceholderText = "Enter Name and press Enter", RemoveTextAfterFocusLost = false, Flag = "NamedPosInput", Callback = function(t) 
     local hrp = getRoot()
     if hrp and t ~= "" then
         tempStates.SavedPositions[t] = hrp.Position
@@ -475,7 +481,7 @@ end})
 TeleportsTab:CreateSlider({Name = "119. Teleport Delay Control", Range = {0, 10}, Increment = 0.1, CurrentValue = 0, Flag = "TPDelSli", Callback = function(v) Settings.TeleportDelay = v end})
 TeleportsTab:CreateToggle({Name = "120. Tween Teleport (smooth)", CurrentValue = false, Flag = "TweenTPTog", Callback = function(v) Toggles.TweenTP = v end})
 TeleportsTab:CreateSlider({Name = "121. Random Teleport Radius", Range = {0, 1000}, Increment = 10, CurrentValue = 0, Flag = "RandRadSli", Callback = function(v) Settings.RandTPRad = v end})
-TeleportsTab:CreateInput({Name = "122. Player Teleport (select)", PlaceholderText = "Username", RemoveTextAfterFocusLost = false, Callback = function(t) Settings.TargetPlayer = t end})
+TeleportsTab:CreateInput({Name = "122. Player Teleport (select)", PlaceholderText = "Username", RemoveTextAfterFocusLost = false, Flag = "PlayerTPInput", Callback = function(t) Settings.TargetPlayer = t end})
 TeleportsTab:CreateButton({Name = "Teleport to Player", Callback = function()
     local target = Players:FindFirstChild(Settings.TargetPlayer)
     local hrp = getRoot()
@@ -503,7 +509,7 @@ Settings.ReplyText = ""
 
 UtilityTab:CreateToggle({Name = "126. Anti AFK", CurrentValue = true, Flag = "AntiAFKTog", Callback = function(v) Toggles.AntiAFK = v end})
 connections.afk = LocalPlayer.Idled:Connect(function()
-    if Toggles.AntiAFK then
+    if Toggles.AntiAFK and VirtualUser then
         VirtualUser:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
         task.wait(1)
         VirtualUser:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
@@ -539,9 +545,9 @@ UtilityTab:CreateButton({Name = "133. Memory Cleaner", Callback = function()
 end})
 UtilityTab:CreateToggle({Name = "134. Ping Display", CurrentValue = false, Flag = "PingTog", Callback = function(v) Toggles.PingDisp = v end})
 UtilityTab:CreateToggle({Name = "135. FPS Counter", CurrentValue = false, Flag = "FPSTog", Callback = function(v) Toggles.FPSCounter = v end})
-UtilityTab:CreateInput({Name = "Chat Spam Message", PlaceholderText = "Message", RemoveTextAfterFocusLost = false, Callback = function(t) Settings.SpamText = t end})
+UtilityTab:CreateInput({Name = "Chat Spam Message", PlaceholderText = "Message", RemoveTextAfterFocusLost = false, Flag = "ChatSpamInput", Callback = function(t) Settings.SpamText = t end})
 UtilityTab:CreateToggle({Name = "136. Auto Chat Spam", CurrentValue = false, Flag = "SpamTog", Callback = function(v) Toggles.AutoChatSpam = v end})
-UtilityTab:CreateInput({Name = "Auto Reply Text", PlaceholderText = "Reply", RemoveTextAfterFocusLost = false, Callback = function(t) Settings.ReplyText = t end})
+UtilityTab:CreateInput({Name = "Auto Reply Text", PlaceholderText = "Reply", RemoveTextAfterFocusLost = false, Flag = "AutoReplyInput", Callback = function(t) Settings.ReplyText = t end})
 UtilityTab:CreateToggle({Name = "137. Auto Reply System", CurrentValue = false, Flag = "ReplyTog", Callback = function(v) Toggles.AutoReply = v end})
 UtilityTab:CreateButton({Name = "138. Notification System Customizer", Callback = function()
     Rayfield:Notify({Title="Custom Notify", Content="Notification System Works", Duration=3})
@@ -580,14 +586,19 @@ AutomationTab:CreateToggle({Name = "150. Smart Target Switching", CurrentValue =
 --=========================================--
 --               LOOPS                     --
 --=========================================--
-local fovCircle = Drawing and Drawing.new("Circle") or nil
-if fovCircle then
-    fovCircle.Visible = false
-    fovCircle.Thickness = 2
-    fovCircle.Color = Color3.fromRGB(255, 255, 255)
-    fovCircle.Filled = false
-    fovCircle.Transparency = 1
-end
+local fovCircle = nil
+pcall(function()
+    if Drawing and Drawing.new then
+        fovCircle = Drawing.new("Circle")
+        if fovCircle then
+            fovCircle.Visible = false
+            fovCircle.Thickness = 2
+            fovCircle.Color = Color3.fromRGB(255, 255, 255)
+            fovCircle.Filled = false
+            fovCircle.Transparency = 1
+        end
+    end
+end)
 
 connections.main = RunService.RenderStepped:Connect(function()
     local char, hrp, hum = getChar(), getRoot(), getHum()
