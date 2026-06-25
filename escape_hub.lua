@@ -1046,7 +1046,7 @@ Toggles.WallWalk = false
 Settings.LadderSpeed = 1
 Settings.ClimbSpeed = 1
 
-MovementTab:CreateSlider({Name = "WalkSpeed", Range = {16, 500}, Increment = 1, CurrentValue = 16, Flag = "WalkSpeed", Callback = function(v) Settings.WalkSpeed = v end})
+MovementTab:CreateSlider({Name = "WalkSpeed", Range = {16, 5000}, Increment = 1, CurrentValue = 16, Flag = "WalkSpeed", Callback = function(v) Settings.WalkSpeed = v end})
 MovementTab:CreateSlider({Name = "JumpPower", Range = {50, 500}, Increment = 10, CurrentValue = 50, Flag = "JumpPower", Callback = function(v) Settings.JumpPower = v end})
 MovementTab:CreateSlider({Name = "Sprint Mult", Range = {1, 5}, Increment = 0.1, CurrentValue = 1.5, Flag = "SprintMult", Callback = function(v) Settings.SprintMult = v end})
 MovementTab:CreateSlider({Name = "Acceleration", Range = {0.1, 10}, Increment = 0.1, CurrentValue = 1, Flag = "Acceleration", Callback = function(v) Settings.Acceleration = v end})
