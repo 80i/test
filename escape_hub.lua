@@ -11,7 +11,7 @@ local TeleportService = game:GetService("TeleportService")
 
 local player = Players.LocalPlayer
 
---// CHARACTER
+--// CHARACTER HANDLING
 local character, humanoid, root
 
 local function loadChar(char)
@@ -33,34 +33,13 @@ local Theme = {
 	TEXT = Color3.fromRGB(235,235,240)
 }
 
---// FEATURE SYSTEM
-local Features = {}
-function Features.new(name, onEnable, onDisable)
-	return {
-		Name = name,
-		Enabled = false,
-		Enable = function(self)
-			if self.Enabled then return end
-			self.Enabled = true
-			onEnable()
-		end,
-		Disable = function(self)
-			if not self.Enabled then return end
-			self.Enabled = false
-			onDisable()
-		end,
-		Toggle = function(self)
-			if self.Enabled then self:Disable() else self:Enable() end
-		end
-	}
-end
-
 --// GUI
-local gui = Instance.new("ScreenGui", game.CoreGui)
-gui.Name = "CypherX_Ultra"
+local gui = Instance.new("ScreenGui")
+gui.Name = "CypherX_Stable"
+pcall(function() gui.Parent = game.CoreGui end)
 
 local main = Instance.new("Frame", gui)
-main.Size = UDim2.new(0,520,0,380)
+main.Size = UDim2.new(0,520,0,400)
 main.Position = UDim2.new(0.3,0,0.25,0)
 main.BackgroundColor3 = Theme.BG
 main.Active = true
@@ -70,7 +49,7 @@ Instance.new("UICorner", main)
 -- TITLE
 local title = Instance.new("TextLabel", main)
 title.Size = UDim2.new(1,0,0,40)
-title.Text = "CYPHERX ULTRA HUB"
+title.Text = "CYPHERX STABLE HUB"
 title.TextColor3 = Theme.TEXT
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -80,14 +59,14 @@ title.BackgroundTransparency = 1
 local container = Instance.new("ScrollingFrame", main)
 container.Size = UDim2.new(1,0,1,-60)
 container.Position = UDim2.new(0,0,0,40)
-container.CanvasSize = UDim2.new(0,0,0,1200)
+container.CanvasSize = UDim2.new(0,0,0,1500)
 container.ScrollBarThickness = 4
 container.BackgroundTransparency = 1
 
 local layout = Instance.new("UIListLayout", container)
 layout.Padding = UDim.new(0,8)
 
--- COORDS
+-- COORD DISPLAY
 local coord = Instance.new("TextLabel", main)
 coord.Size = UDim2.new(1,0,0,20)
 coord.Position = UDim2.new(0,0,1,-20)
@@ -103,20 +82,22 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
---// TOGGLE UI
-local function createToggle(name, feature)
+--// FEATURE SYSTEM
+local function createToggle(name, callbackOn, callbackOff)
+	local enabled = false
+
 	local frame = Instance.new("Frame", container)
 	frame.Size = UDim2.new(1,-10,0,40)
 	frame.BackgroundColor3 = Theme.CARD
 	Instance.new("UICorner", frame)
 
-	local txt = Instance.new("TextLabel", frame)
-	txt.Text = name
-	txt.Size = UDim2.new(0.6,0,1,0)
-	txt.BackgroundTransparency = 1
-	txt.TextColor3 = Theme.TEXT
-	txt.Font = Enum.Font.GothamBold
-	txt.TextSize = 12
+	local label = Instance.new("TextLabel", frame)
+	label.Text = name
+	label.Size = UDim2.new(0.6,0,1,0)
+	label.BackgroundTransparency = 1
+	label.TextColor3 = Theme.TEXT
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 12
 
 	local btn = Instance.new("TextButton", frame)
 	btn.Size = UDim2.new(0,90,0,26)
@@ -129,36 +110,154 @@ local function createToggle(name, feature)
 	Instance.new("UICorner", btn)
 
 	local function update()
+		btn.Text = enabled and "ON" or "OFF"
 		TweenService:Create(btn, TweenInfo.new(0.15), {
-			BackgroundColor3 = feature.Enabled and Theme.ON or Theme.OFF
+			BackgroundColor3 = enabled and Theme.ON or Theme.OFF
 		}):Play()
-		btn.Text = feature.Enabled and "ON" or "OFF"
 	end
 
 	btn.MouseButton1Click:Connect(function()
-		feature:Toggle()
+		enabled = not enabled
+		if enabled then
+			if callbackOn then callbackOn() end
+		else
+			if callbackOff then callbackOff() end
+		end
 		update()
 	end)
 
 	update()
 end
 
---// SAVE POSITIONS
-local saved = {}
+--// BUTTON (NON-TOGGLE)
+local function createButton(name, callback)
+	local frame = Instance.new("Frame", container)
+	frame.Size = UDim2.new(1,-10,0,40)
+	frame.BackgroundColor3 = Theme.CARD
+	Instance.new("UICorner", frame)
 
-local function savePos()
-	if root then table.insert(saved, root.CFrame) end
+	local btn = Instance.new("TextButton", frame)
+	btn.Size = UDim2.new(1,-10,1,-10)
+	btn.Position = UDim2.new(0,5,0,5)
+	btn.Text = name
+	btn.BackgroundColor3 = Theme.ACCENT
+	btn.TextColor3 = Theme.TEXT
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 12
+	Instance.new("UICorner", btn)
+
+	btn.MouseButton1Click:Connect(callback)
 end
 
-local function tpPos(i)
-	if saved[i] and root then root.CFrame = saved[i] end
+--// SLIDER
+local function createSlider(name, min, max, default, callback)
+	local value = default
+
+	local frame = Instance.new("Frame", container)
+	frame.Size = UDim2.new(1,-10,0,55)
+	frame.BackgroundColor3 = Theme.CARD
+	Instance.new("UICorner", frame)
+
+	local label = Instance.new("TextLabel", frame)
+	label.Text = name .. ": " .. default
+	label.Size = UDim2.new(1,0,0,20)
+	label.BackgroundTransparency = 1
+	label.TextColor3 = Theme.TEXT
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 12
+
+	local bar = Instance.new("Frame", frame)
+	bar.Size = UDim2.new(1,-20,0,6)
+	bar.Position = UDim2.new(0,10,0,30)
+	bar.BackgroundColor3 = Theme.OFF
+	Instance.new("UICorner", bar)
+
+	local fill = Instance.new("Frame", bar)
+	fill.Size = UDim2.new((default-min)/(max-min),0,1,0)
+	fill.BackgroundColor3 = Theme.ACCENT
+	Instance.new("UICorner", fill)
+
+	local dragging = false
+
+	bar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+		end
+	end)
+
+	UIS.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+
+	UIS.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local rel = (input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
+			rel = math.clamp(rel,0,1)
+
+			fill.Size = UDim2.new(rel,0,1,0)
+
+			value = math.floor(min + (max-min)*rel)
+			label.Text = name .. ": " .. value
+
+			if callback then callback(value) end
+		end
+	end)
+
+	if callback then callback(default) end
+end
+
+--// INPUT BOX
+local function createInput(name, default, callback)
+	local frame = Instance.new("Frame", container)
+	frame.Size = UDim2.new(1,-10,0,40)
+	frame.BackgroundColor3 = Theme.CARD
+	Instance.new("UICorner", frame)
+
+	local box = Instance.new("TextBox", frame)
+	box.Size = UDim2.new(1,-10,1,-10)
+	box.Position = UDim2.new(0,5,0,5)
+	box.Text = tostring(default)
+	box.PlaceholderText = name
+	box.BackgroundColor3 = Theme.BG
+	box.TextColor3 = Theme.TEXT
+	box.Font = Enum.Font.GothamBold
+	box.TextSize = 12
+	Instance.new("UICorner", box)
+
+	box.FocusLost:Connect(function()
+		local num = tonumber(box.Text)
+		if num and callback then
+			callback(num)
+		end
+	end)
 end
 
 --// FEATURES
 
+-- SPEED CONTROL
+createSlider("WalkSpeed", 16, 300, 50, function(val)
+	if humanoid then humanoid.WalkSpeed = val end
+end)
+
+createInput("Exact Speed", 50, function(val)
+	if humanoid then humanoid.WalkSpeed = val end
+end)
+
+-- JUMP
+createSlider("Jump Power", 50, 300, 50, function(val)
+	if humanoid then humanoid.JumpPower = val end
+end)
+
+-- GRAVITY
+createSlider("Gravity", 0, 300, 196, function(val)
+	workspace.Gravity = val
+end)
+
 -- GODMODE
 local godConn
-local God = Features.new("Godmode",
+createToggle("Godmode",
 function()
 	godConn = RunService.Heartbeat:Connect(function()
 		if humanoid then
@@ -170,35 +269,15 @@ function()
 	if godConn then godConn:Disconnect() end
 end)
 
--- SPEED
-local Speed = Features.new("Speed",
-function() humanoid.WalkSpeed = 120 end,
-function() humanoid.WalkSpeed = 16 end)
-
--- JUMP
-local Jump = Features.new("Super Jump",
-function() humanoid.JumpPower = 120 end,
-function() humanoid.JumpPower = 50 end)
-
--- INF JUMP
-local infConn
-local InfJump = Features.new("Infinite Jump",
-function()
-	infConn = UIS.JumpRequest:Connect(function()
-		humanoid:ChangeState("Jumping")
-	end)
-end,
-function()
-	if infConn then infConn:Disconnect() end
-end)
-
 -- NOCLIP
 local noclipConn
-local Noclip = Features.new("Noclip",
+createToggle("Noclip",
 function()
 	noclipConn = RunService.Stepped:Connect(function()
-		for _,v in ipairs(character:GetChildren()) do
-			if v:IsA("BasePart") then v.CanCollide = false end
+		if character then
+			for _,v in ipairs(character:GetChildren()) do
+				if v:IsA("BasePart") then v.CanCollide = false end
+			end
 		end
 	end)
 end,
@@ -206,100 +285,30 @@ function()
 	if noclipConn then noclipConn:Disconnect() end
 end)
 
--- FLY
-local flyConn
-local Fly = Features.new("Fly",
-function()
-	flyConn = RunService.RenderStepped:Connect(function()
-		root.Velocity = Vector3.new(0,50,0)
-	end)
-end,
-function()
-	if flyConn then flyConn:Disconnect() end
+-- SAVE / TP
+local saved = {}
+
+createButton("Save Position", function()
+	if root then table.insert(saved, root.CFrame) end
 end)
 
--- FULLBRIGHT
-local Bright = Features.new("FullBright",
-function() Lighting.Brightness = 5 end,
-function() Lighting.Brightness = 1 end)
-
--- LOW GRAVITY
-local Grav = Features.new("Low Gravity",
-function() workspace.Gravity = 50 end,
-function() workspace.Gravity = 196 end)
-
--- SPIN
-local spinConn
-local Spin = Features.new("Spin",
-function()
-	spinConn = RunService.RenderStepped:Connect(function()
-		root.CFrame = root.CFrame * CFrame.Angles(0, math.rad(10), 0)
-	end)
-end,
-function()
-	if spinConn then spinConn:Disconnect() end
+createButton("Teleport Slot 1", function()
+	if root and saved[1] then root.CFrame = saved[1] end
 end)
 
--- FREEZE
-local Freeze = Features.new("Freeze",
-function() humanoid.WalkSpeed = 0 end,
-function() humanoid.WalkSpeed = 16 end)
-
--- AUTO WALK
-local walkConn
-local Walk = Features.new("Auto Walk",
-function()
-	walkConn = RunService.Heartbeat:Connect(function()
-		humanoid:Move(Vector3.new(1,0,0), true)
-	end)
-end,
-function()
-	if walkConn then walkConn:Disconnect() end
+createButton("Teleport Slot 2", function()
+	if root and saved[2] then root.CFrame = saved[2] end
 end)
 
 -- REJOIN
-local Rejoin = Features.new("Rejoin",
-function()
+createButton("Rejoin Server", function()
 	TeleportService:Teleport(game.PlaceId)
-end,
-function() end)
+end)
 
--- SAVE POS
-local Save = Features.new("Save Position",
-function() savePos() end,
-function() end)
-
--- TP SLOT1
-local TP1 = Features.new("Teleport Slot 1",
-function() tpPos(1) end,
-function() end)
-
--- TP SLOT2
-local TP2 = Features.new("Teleport Slot 2",
-function() tpPos(2) end,
-function() end)
-
---// REGISTER
-createToggle("Godmode", God)
-createToggle("Speed", Speed)
-createToggle("Super Jump", Jump)
-createToggle("Infinite Jump", InfJump)
-createToggle("Noclip", Noclip)
-createToggle("Fly", Fly)
-createToggle("FullBright", Bright)
-createToggle("Low Gravity", Grav)
-createToggle("Spin", Spin)
-createToggle("Freeze", Freeze)
-createToggle("Auto Walk", Walk)
-createToggle("Rejoin Server", Rejoin)
-createToggle("Save Position", Save)
-createToggle("Teleport Slot 1", TP1)
-createToggle("Teleport Slot 2", TP2)
-
---// UI TOGGLE
+-- UI TOGGLE
 local visible = true
-UIS.InputBegan:Connect(function(i,g)
-	if not g and i.KeyCode == Enum.KeyCode.RightShift then
+UIS.InputBegan:Connect(function(input,gpe)
+	if not gpe and input.KeyCode == Enum.KeyCode.RightShift then
 		visible = not visible
 		main.Visible = visible
 	end
