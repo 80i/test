@@ -14,7 +14,7 @@ local Window = Rayfield:CreateWindow({
    ConfigurationSaving = {
       Enabled = true,
       FolderName = "CypherXConfig",
-      FileName = "EscapeV2"
+      FileName = "EscapeV2_Full" -- Changed to prevent old config crash
    },
    Discord = {
       Enabled = false,
@@ -76,6 +76,7 @@ end
 --=========================================--
 --               MAIN TAB                  --
 --=========================================--
+task.wait(0.05) -- Yield to prevent instruction timeout
 local SectionMain = MainTab:CreateSection("Basic Movement Enhancements")
 
 Toggles.AutoWalk = false
@@ -151,6 +152,7 @@ MainTab:CreateSlider({
 --=========================================--
 --             COMBAT SYSTEM               --
 --=========================================--
+task.wait(0.05) -- Yield to prevent instruction timeout
 local SectionCombat = CombatTab:CreateSection("Aimbot System")
 
 Toggles.Aimbot = false
@@ -168,7 +170,7 @@ CombatTab:CreateToggle({Name = "1. Aimbot Enable", CurrentValue = false, Flag = 
 CombatTab:CreateSlider({Name = "2. Aimbot Smoothness", Range = {1, 10}, Increment = 0.1, CurrentValue = 1, Flag = "AimbotSmoothSlider", Callback = function(v) Settings.AimbotSmoothness = v end})
 CombatTab:CreateSlider({Name = "3. Aimbot FOV Radius", Range = {10, 1000}, Increment = 1, CurrentValue = 100, Flag = "AimbotFOVSlider", Callback = function(v) Settings.AimbotFOV = v end})
 CombatTab:CreateSlider({Name = "4. Aimbot Prediction", Range = {0, 10}, Increment = 0.1, CurrentValue = 0, Flag = "AimbotPredSlider", Callback = function(v) Settings.AimbotPrediction = v end})
-CombatTab:CreateDropdown({Name = "5. Target Bone Selector", Options = {"Head", "HumanoidRootPart", "Random"}, CurrentOption = {"Head"}, Flag = "AimbotBoneDrop", Callback = function(v) Settings.TargetBone = v[1] end})
+CombatTab:CreateDropdown({Name = "5. Target Bone Selector", Options = {"Head", "HumanoidRootPart", "Random"}, CurrentOption = {"Head"}, MultipleOptions = false, Flag = "AimbotBoneDrop", Callback = function(v) Settings.TargetBone = type(v) == "table" and v[1] or v end})
 CombatTab:CreateToggle({Name = "6. Team Check", CurrentValue = false, Flag = "TeamCheckToggle", Callback = function(v) Toggles.TeamCheck = v end})
 CombatTab:CreateToggle({Name = "7. Visibility Check", CurrentValue = false, Flag = "VisCheckToggle", Callback = function(v) Toggles.VisibilityCheck = v end})
 CombatTab:CreateInput({Name = "8. Lock Keybind", PlaceholderText = "E", RemoveTextAfterFocusLost = false, Flag = "LockKeybindInput", Callback = function(t) Settings.LockKeybind = t end})
@@ -185,7 +187,7 @@ Toggles.IgnoreDowned = false
 CombatTab:CreateToggle({Name = "11. Silent Aim Enable", CurrentValue = false, Flag = "SilentAimToggle", Callback = function(v) Toggles.SilentAim = v end})
 CombatTab:CreateSlider({Name = "12. Hit Chance %", Range = {0, 100}, Increment = 1, CurrentValue = 100, Flag = "HitChanceSlider", Callback = function(v) Settings.HitChance = v end})
 CombatTab:CreateSlider({Name = "13. Silent Aim FOV", Range = {10, 1000}, Increment = 1, CurrentValue = 100, Flag = "SilentAimFOVSlider", Callback = function(v) Settings.SilentAimFOV = v end})
-CombatTab:CreateDropdown({Name = "14. Bone Priority System", Options = {"Head", "Torso", "Limbs"}, CurrentOption = {"Head"}, Flag = "BonePrioDrop", Callback = function(v) Settings.BonePriority = v[1] end})
+CombatTab:CreateDropdown({Name = "14. Bone Priority System", Options = {"Head", "Torso", "Limbs"}, CurrentOption = {"Head"}, MultipleOptions = false, Flag = "BonePrioDrop", Callback = function(v) Settings.BonePriority = type(v) == "table" and v[1] or v end})
 CombatTab:CreateToggle({Name = "15. Ignore Downed Targets", CurrentValue = false, Flag = "IgnoreDownedToggle", Callback = function(v) Toggles.IgnoreDowned = v end})
 
 local SectionTriggerbot = CombatTab:CreateSection("Triggerbot")
@@ -197,6 +199,7 @@ CombatTab:CreateToggle({Name = "16. Auto Fire on Target (Triggerbot)", CurrentVa
 CombatTab:CreateSlider({Name = "17. Trigger Delay (ms)", Range = {0, 1000}, Increment = 10, CurrentValue = 0, Flag = "TriggerDelaySlider", Callback = function(v) Settings.TriggerDelay = v end})
 CombatTab:CreateToggle({Name = "18. Burst Mode", CurrentValue = false, Flag = "BurstModeToggle", Callback = function(v) Toggles.BurstMode = v end})
 
+task.wait(0.05) -- Yield
 local SectionWeapons = CombatTab:CreateSection("Weapon Mods")
 Toggles.NoRecoil = false
 Toggles.NoSpread = false
@@ -228,6 +231,7 @@ CombatTab:CreateSlider({Name = "30. Aim Assist Strength", Range = {0, 100}, Incr
 --=========================================--
 --           ADVANCED MOVEMENT             --
 --=========================================--
+task.wait(0.05) -- Yield
 local SectionAdvMov = AdvMovementTab:CreateSection("Advanced Movement Configs")
 
 Settings.WalkSpeed = 16
@@ -288,6 +292,7 @@ AdvMovementTab:CreateToggle({Name = "55. Movement Correction System", CurrentVal
 --=========================================--
 --               VISUAL PRO                --
 --=========================================--
+task.wait(0.05) -- Yield
 local SectionVisualESP = VisualProTab:CreateSection("ESP Enhancements")
 Toggles.BoxESP = false
 Toggles.NameESP = false
@@ -305,12 +310,13 @@ VisualProTab:CreateToggle({Name = "57. Name ESP", CurrentValue = false, Flag = "
 VisualProTab:CreateToggle({Name = "58. Health ESP", CurrentValue = false, Flag = "HealthESPTog", Callback = function(v) Toggles.HealthESP = v end})
 VisualProTab:CreateToggle({Name = "59. Distance ESP", CurrentValue = false, Flag = "DistESPTog", Callback = function(v) Toggles.DistanceESP = v end})
 VisualProTab:CreateToggle({Name = "60. Skeleton ESP", CurrentValue = false, Flag = "SkelESPTog", Callback = function(v) Toggles.SkeletonESP = v end})
-VisualProTab:CreateDropdown({Name = "61. Chams (Solid/Wireframe)", Options = {"Solid", "Wireframe"}, CurrentOption = {"Solid"}, Flag = "ChamsDrop", Callback = function(v) Settings.ChamsType = v[1] end})
+VisualProTab:CreateDropdown({Name = "61. Chams (Solid/Wireframe)", Options = {"Solid", "Wireframe"}, CurrentOption = {"Solid"}, MultipleOptions = false, Flag = "ChamsDrop", Callback = function(v) Settings.ChamsType = type(v) == "table" and v[1] or v end})
 VisualProTab:CreateToggle({Name = "62. Team Color ESP", CurrentValue = false, Flag = "TeamESPTog", Callback = function(v) Toggles.TeamColorESP = v end})
 VisualProTab:CreateToggle({Name = "63. Rainbow ESP", CurrentValue = false, Flag = "RainbowESPTog", Callback = function(v) Toggles.RainbowESP = v end})
 VisualProTab:CreateSlider({Name = "64. ESP Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Flag = "ESPTransSli", Callback = function(v) Settings.ESPTransparency = v end})
 VisualProTab:CreateSlider({Name = "65. ESP Max Distance", Range = {100, 10000}, Increment = 100, CurrentValue = 2000, Flag = "ESPMaxDistSli", Callback = function(v) Settings.ESPMaxDist = v end})
 
+task.wait(0.05) -- Yield
 local SectionCamera = VisualProTab:CreateSection("Camera / FOV")
 Settings.CustomFOV = 70
 Toggles.FOVUnlock = false
@@ -349,7 +355,7 @@ Settings.ShadowInt = 1
 VisualProTab:CreateToggle({Name = "76. Fullbright Pro", CurrentValue = false, Flag = "FBTog", Callback = function(v) Toggles.Fullbright = v end})
 VisualProTab:CreateToggle({Name = "77. Night Mode", CurrentValue = false, Flag = "NightTog", Callback = function(v) Toggles.NightMode = v end})
 VisualProTab:CreateToggle({Name = "78. Remove Fog", CurrentValue = false, Flag = "FogTog", Callback = function(v) Toggles.RemFog = v end})
-VisualProTab:CreateDropdown({Name = "79. Skybox Changer", Options = {"Default", "Galaxy", "Vaporwave", "Red"}, CurrentOption = {"Default"}, Flag = "SkyDrop", Callback = function(v) Settings.Skybox = v[1] end})
+VisualProTab:CreateDropdown({Name = "79. Skybox Changer", Options = {"Default", "Galaxy", "Vaporwave", "Red"}, CurrentOption = {"Default"}, MultipleOptions = false, Flag = "SkyDrop", Callback = function(v) Settings.Skybox = type(v) == "table" and v[1] or v end})
 VisualProTab:CreateSlider({Name = "80. Time Changer", Range = {0, 24}, Increment = 1, CurrentValue = 12, Flag = "TimeSli", Callback = function(v) Settings.TimeChange = v; if Lighting then Lighting.ClockTime = v end end})
 VisualProTab:CreateSlider({Name = "81. Saturation Control", Range = {0, 5}, Increment = 0.1, CurrentValue = 1, Flag = "SatSli", Callback = function(v) Settings.Saturation = v end})
 VisualProTab:CreateSlider({Name = "82. Contrast Control", Range = {0, 5}, Increment = 0.1, CurrentValue = 1, Flag = "ConSli", Callback = function(v) Settings.Contrast = v end})
@@ -360,6 +366,7 @@ VisualProTab:CreateSlider({Name = "85. Shadow Intensity", Range = {0, 1}, Increm
 --=========================================--
 --              PLAYER MODS                --
 --=========================================--
+task.wait(0.05) -- Yield
 local SectionPlayer = PlayerModsTab:CreateSection("Character Enhancements")
 Toggles.Godmode = false
 Settings.HealSpeed = 1
@@ -396,6 +403,7 @@ PlayerModsTab:CreateToggle({Name = "100. Instant Respawn", CurrentValue = false,
 --=========================================--
 --               WORLD MODS                --
 --=========================================--
+task.wait(0.05) -- Yield
 local SectionWorld = WorldModsTab:CreateSection("Environment Interactions")
 Settings.Gravity = 196
 Settings.GlobalSpeed = 1
@@ -432,6 +440,7 @@ WorldModsTab:CreateToggle({Name = "115. Remove Textures", CurrentValue = false, 
 --=========================================--
 --            TELEPORT SYSTEM              --
 --=========================================--
+task.wait(0.05) -- Yield
 local SectionTP = TeleportsTab:CreateSection("Position Management")
 tempStates.SavedPositions = {
     ["End Stage"] = Vector3.new(7986.58, 718.30, 5143.11),
@@ -466,7 +475,7 @@ end})
 local locOptions = {}
 for k,_ in pairs(tempStates.SavedPositions) do table.insert(locOptions, k) end
 
-TeleportsTab:CreateDropdown({Name = "118. Teleport List UI", Options = locOptions, CurrentOption = {locOptions[1] or ""}, Flag = "TPListDrop", Callback = function(v) Settings.SelectedLocation = v[1] end})
+TeleportsTab:CreateDropdown({Name = "118. Teleport List UI", Options = locOptions, CurrentOption = {locOptions[1] or ""}, MultipleOptions = false, Flag = "TPListDrop", Callback = function(v) Settings.SelectedLocation = type(v) == "table" and v[1] or v end})
 TeleportsTab:CreateButton({Name = "Teleport to Selected", Callback = function()
     local hrp = getRoot()
     if hrp and tempStates.SavedPositions[Settings.SelectedLocation] then
@@ -496,6 +505,7 @@ TeleportsTab:CreateToggle({Name = "125. Auto Return Position", CurrentValue = fa
 --=========================================--
 --                UTILITY                  --
 --=========================================--
+task.wait(0.05) -- Yield
 local SectionUtil = UtilityTab:CreateSection("QOL Features")
 Toggles.AntiAFK = false
 Toggles.FPSBoost = false
@@ -556,6 +566,7 @@ end})
 --=========================================--
 --              AUTOMATION                 --
 --=========================================--
+task.wait(0.05) -- Yield
 local SectionAuto = AutomationTab:CreateSection("Farming & Automation")
 Toggles.AutoFarmPath = false
 Toggles.AutoCollect = false
