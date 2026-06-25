@@ -1,315 +1,324 @@
---// LOAD
 if not game:IsLoaded() then game.Loaded:Wait() end
 
---// SERVICES
+-- Rayfield
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "CYPHERX HUB — ESCAPE V2+",
+   LoadingTitle = "CypherX Loading...",
+   LoadingSubtitle = "Optimized Build",
+   Theme = "Default",
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = "CypherXConfig",
+      FileName = "EscapeV2Plus"
+   },
+})
+
+-- SERVICES
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 local UIS = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
-local TeleportService = game:GetService("TeleportService")
+local VirtualUser = game:GetService("VirtualUser")
 
-local player = Players.LocalPlayer
+local LocalPlayer = Players.LocalPlayer
 
---// CHARACTER HANDLING
-local character, humanoid, root
+-- TABS
+local MainTab = Window:CreateTab("Main", "swords")
+local VisualsTab = Window:CreateTab("Visuals", "eye")
+local TeleportsTab = Window:CreateTab("Teleports", "map-pin")
 
-local function loadChar(char)
-	character = char
-	humanoid = char:WaitForChild("Humanoid")
-	root = char:WaitForChild("HumanoidRootPart")
-end
-
-player.CharacterAdded:Connect(loadChar)
-if player.Character then loadChar(player.Character) end
-
---// THEME
-local Theme = {
-	BG = Color3.fromRGB(18,18,22),
-	CARD = Color3.fromRGB(24,24,30),
-	ACCENT = Color3.fromRGB(0,170,255),
-	ON = Color3.fromRGB(0,200,120),
-	OFF = Color3.fromRGB(40,40,50),
-	TEXT = Color3.fromRGB(235,235,240)
+-- STATE
+local Toggles = {
+    AutoWalk = false,
+    Noclip = false,
+    InfJump = false,
+    Fly = false,
+    ESP = false,
+    Godmode = false,
+    AntiAFK = false
 }
 
---// GUI
-local gui = Instance.new("ScreenGui")
-gui.Name = "CypherX_Stable"
-pcall(function() gui.Parent = game.CoreGui end)
+local Settings = {
+    WalkSpeed = 16,
+    JumpPower = 50,
+    FlySpeed = 50,
+    Gravity = 196
+}
 
-local main = Instance.new("Frame", gui)
-main.Size = UDim2.new(0,520,0,400)
-main.Position = UDim2.new(0.3,0,0.25,0)
-main.BackgroundColor3 = Theme.BG
-main.Active = true
-main.Draggable = true
-Instance.new("UICorner", main)
+local connections = {}
+local FlyBody = nil
 
--- TITLE
-local title = Instance.new("TextLabel", main)
-title.Size = UDim2.new(1,0,0,40)
-title.Text = "CYPHERX STABLE HUB"
-title.TextColor3 = Theme.TEXT
-title.Font = Enum.Font.GothamBold
-title.TextSize = 14
-title.BackgroundTransparency = 1
-
--- CONTAINER
-local container = Instance.new("ScrollingFrame", main)
-container.Size = UDim2.new(1,0,1,-60)
-container.Position = UDim2.new(0,0,0,40)
-container.CanvasSize = UDim2.new(0,0,0,1500)
-container.ScrollBarThickness = 4
-container.BackgroundTransparency = 1
-
-local layout = Instance.new("UIListLayout", container)
-layout.Padding = UDim.new(0,8)
-
--- COORD DISPLAY
-local coord = Instance.new("TextLabel", main)
-coord.Size = UDim2.new(1,0,0,20)
-coord.Position = UDim2.new(0,0,1,-20)
-coord.BackgroundTransparency = 1
-coord.TextColor3 = Theme.TEXT
-coord.Font = Enum.Font.Gotham
-coord.TextSize = 11
-
-RunService.RenderStepped:Connect(function()
-	if root then
-		local p = root.Position
-		coord.Text = ("X %.1f | Y %.1f | Z %.1f"):format(p.X,p.Y,p.Z)
-	end
-end)
-
---// FEATURE SYSTEM
-local function createToggle(name, callbackOn, callbackOff)
-	local enabled = false
-
-	local frame = Instance.new("Frame", container)
-	frame.Size = UDim2.new(1,-10,0,40)
-	frame.BackgroundColor3 = Theme.CARD
-	Instance.new("UICorner", frame)
-
-	local label = Instance.new("TextLabel", frame)
-	label.Text = name
-	label.Size = UDim2.new(0.6,0,1,0)
-	label.BackgroundTransparency = 1
-	label.TextColor3 = Theme.TEXT
-	label.Font = Enum.Font.GothamBold
-	label.TextSize = 12
-
-	local btn = Instance.new("TextButton", frame)
-	btn.Size = UDim2.new(0,90,0,26)
-	btn.Position = UDim2.new(1,-100,0.5,-13)
-	btn.BackgroundColor3 = Theme.OFF
-	btn.Text = "OFF"
-	btn.TextColor3 = Theme.TEXT
-	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 11
-	Instance.new("UICorner", btn)
-
-	local function update()
-		btn.Text = enabled and "ON" or "OFF"
-		TweenService:Create(btn, TweenInfo.new(0.15), {
-			BackgroundColor3 = enabled and Theme.ON or Theme.OFF
-		}):Play()
-	end
-
-	btn.MouseButton1Click:Connect(function()
-		enabled = not enabled
-		if enabled then
-			if callbackOn then callbackOn() end
-		else
-			if callbackOff then callbackOff() end
-		end
-		update()
-	end)
-
-	update()
+-- SAFE CHARACTER FETCH
+local function getHumanoid()
+    local char = LocalPlayer.Character
+    if char then
+        return char:FindFirstChildOfClass("Humanoid")
+    end
 end
 
---// BUTTON (NON-TOGGLE)
-local function createButton(name, callback)
-	local frame = Instance.new("Frame", container)
-	frame.Size = UDim2.new(1,-10,0,40)
-	frame.BackgroundColor3 = Theme.CARD
-	Instance.new("UICorner", frame)
-
-	local btn = Instance.new("TextButton", frame)
-	btn.Size = UDim2.new(1,-10,1,-10)
-	btn.Position = UDim2.new(0,5,0,5)
-	btn.Text = name
-	btn.BackgroundColor3 = Theme.ACCENT
-	btn.TextColor3 = Theme.TEXT
-	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 12
-	Instance.new("UICorner", btn)
-
-	btn.MouseButton1Click:Connect(callback)
+local function getRoot()
+    local char = LocalPlayer.Character
+    if char then
+        return char:FindFirstChild("HumanoidRootPart")
+    end
 end
 
---// SLIDER
-local function createSlider(name, min, max, default, callback)
-	local value = default
+-- =========================
+-- MAIN TAB
+-- =========================
 
-	local frame = Instance.new("Frame", container)
-	frame.Size = UDim2.new(1,-10,0,55)
-	frame.BackgroundColor3 = Theme.CARD
-	Instance.new("UICorner", frame)
+MainTab:CreateSection("Movement")
 
-	local label = Instance.new("TextLabel", frame)
-	label.Text = name .. ": " .. default
-	label.Size = UDim2.new(1,0,0,20)
-	label.BackgroundTransparency = 1
-	label.TextColor3 = Theme.TEXT
-	label.Font = Enum.Font.GothamBold
-	label.TextSize = 12
+MainTab:CreateSlider({
+   Name = "WalkSpeed",
+   Range = {16,300},
+   Increment = 1,
+   CurrentValue = 16,
+   Callback = function(v)
+      Settings.WalkSpeed = v
+   end
+})
 
-	local bar = Instance.new("Frame", frame)
-	bar.Size = UDim2.new(1,-20,0,6)
-	bar.Position = UDim2.new(0,10,0,30)
-	bar.BackgroundColor3 = Theme.OFF
-	Instance.new("UICorner", bar)
+MainTab:CreateSlider({
+   Name = "Jump Power",
+   Range = {50,300},
+   Increment = 1,
+   CurrentValue = 50,
+   Callback = function(v)
+      Settings.JumpPower = v
+   end
+})
 
-	local fill = Instance.new("Frame", bar)
-	fill.Size = UDim2.new((default-min)/(max-min),0,1,0)
-	fill.BackgroundColor3 = Theme.ACCENT
-	Instance.new("UICorner", fill)
+MainTab:CreateSlider({
+   Name = "Gravity",
+   Range = {0,300},
+   Increment = 1,
+   CurrentValue = 196,
+   Callback = function(v)
+      Settings.Gravity = v
+      workspace.Gravity = v
+   end
+})
 
-	local dragging = false
-
-	bar.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-		end
-	end)
-
-	UIS.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = false
-		end
-	end)
-
-	UIS.InputChanged:Connect(function(input)
-		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-			local rel = (input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
-			rel = math.clamp(rel,0,1)
-
-			fill.Size = UDim2.new(rel,0,1,0)
-
-			value = math.floor(min + (max-min)*rel)
-			label.Text = name .. ": " .. value
-
-			if callback then callback(value) end
-		end
-	end)
-
-	if callback then callback(default) end
-end
-
---// INPUT BOX
-local function createInput(name, default, callback)
-	local frame = Instance.new("Frame", container)
-	frame.Size = UDim2.new(1,-10,0,40)
-	frame.BackgroundColor3 = Theme.CARD
-	Instance.new("UICorner", frame)
-
-	local box = Instance.new("TextBox", frame)
-	box.Size = UDim2.new(1,-10,1,-10)
-	box.Position = UDim2.new(0,5,0,5)
-	box.Text = tostring(default)
-	box.PlaceholderText = name
-	box.BackgroundColor3 = Theme.BG
-	box.TextColor3 = Theme.TEXT
-	box.Font = Enum.Font.GothamBold
-	box.TextSize = 12
-	Instance.new("UICorner", box)
-
-	box.FocusLost:Connect(function()
-		local num = tonumber(box.Text)
-		if num and callback then
-			callback(num)
-		end
-	end)
-end
-
---// FEATURES
-
--- SPEED CONTROL
-createSlider("WalkSpeed", 16, 300, 50, function(val)
-	if humanoid then humanoid.WalkSpeed = val end
+-- ENFORCE STATS
+connections.stats = RunService.Heartbeat:Connect(function()
+    local hum = getHumanoid()
+    if hum then
+        if hum.WalkSpeed ~= Settings.WalkSpeed then
+            hum.WalkSpeed = Settings.WalkSpeed
+        end
+        if hum.JumpPower ~= Settings.JumpPower then
+            hum.JumpPower = Settings.JumpPower
+        end
+    end
 end)
 
-createInput("Exact Speed", 50, function(val)
-	if humanoid then humanoid.WalkSpeed = val end
-end)
+-- AUTO WALK
+MainTab:CreateToggle({
+   Name = "Auto Walk",
+   Callback = function(v) Toggles.AutoWalk = v end
+})
 
--- JUMP
-createSlider("Jump Power", 50, 300, 50, function(val)
-	if humanoid then humanoid.JumpPower = val end
-end)
-
--- GRAVITY
-createSlider("Gravity", 0, 300, 196, function(val)
-	workspace.Gravity = val
-end)
-
--- GODMODE
-local godConn
-createToggle("Godmode",
-function()
-	godConn = RunService.Heartbeat:Connect(function()
-		if humanoid then
-			humanoid.Health = humanoid.MaxHealth
-		end
-	end)
-end,
-function()
-	if godConn then godConn:Disconnect() end
+connections.autowalk = RunService.Heartbeat:Connect(function()
+    if Toggles.AutoWalk then
+        local hum = getHumanoid()
+        if hum then
+            hum:Move(Vector3.new(1,0,0), true)
+        end
+    end
 end)
 
 -- NOCLIP
-local noclipConn
-createToggle("Noclip",
-function()
-	noclipConn = RunService.Stepped:Connect(function()
-		if character then
-			for _,v in ipairs(character:GetChildren()) do
-				if v:IsA("BasePart") then v.CanCollide = false end
-			end
-		end
-	end)
-end,
-function()
-	if noclipConn then noclipConn:Disconnect() end
+MainTab:CreateToggle({
+   Name = "Noclip",
+   Callback = function(v) Toggles.Noclip = v end
+})
+
+connections.noclip = RunService.Stepped:Connect(function()
+    if Toggles.Noclip then
+        local char = LocalPlayer.Character
+        if char then
+            for _,v in ipairs(char:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    v.CanCollide = false
+                end
+            end
+        end
+    end
 end)
 
--- SAVE / TP
+-- INF JUMP
+MainTab:CreateToggle({
+   Name = "Infinite Jump",
+   Callback = function(v) Toggles.InfJump = v end
+})
+
+UIS.JumpRequest:Connect(function()
+    if Toggles.InfJump then
+        local hum = getHumanoid()
+        if hum then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+end)
+
+-- GODMODE
+MainTab:CreateToggle({
+   Name = "Godmode",
+   Callback = function(v) Toggles.Godmode = v end
+})
+
+connections.god = RunService.Heartbeat:Connect(function()
+    if Toggles.Godmode then
+        local hum = getHumanoid()
+        if hum then
+            hum.Health = hum.MaxHealth
+            hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll,false)
+        end
+    end
+end)
+
+-- FLY
+MainTab:CreateSection("Fly")
+
+MainTab:CreateToggle({
+   Name = "Fly",
+   Callback = function(v)
+      Toggles.Fly = v
+      local root = getRoot()
+      local hum = getHumanoid()
+      if not root or not hum then return end
+
+      if v then
+          local bv = Instance.new("BodyVelocity")
+          bv.MaxForce = Vector3.new(1e5,1e5,1e5)
+          bv.Parent = root
+
+          local bg = Instance.new("BodyGyro")
+          bg.MaxTorque = Vector3.new(1e5,1e5,1e5)
+          bg.Parent = root
+
+          FlyBody = {bv = bv, bg = bg}
+          hum.PlatformStand = true
+      else
+          if FlyBody then
+              FlyBody.bv:Destroy()
+              FlyBody.bg:Destroy()
+              FlyBody = nil
+          end
+          hum.PlatformStand = false
+      end
+   end
+})
+
+MainTab:CreateSlider({
+   Name = "Fly Speed",
+   Range = {10,200},
+   Increment = 5,
+   CurrentValue = 50,
+   Callback = function(v)
+      Settings.FlySpeed = v
+   end
+})
+
+connections.fly = RunService.RenderStepped:Connect(function()
+    if Toggles.Fly and FlyBody then
+        local root = getRoot()
+        if not root then return end
+
+        local cam = workspace.CurrentCamera
+        local dir = Vector3.zero
+
+        if UIS:IsKeyDown(Enum.KeyCode.W) then dir += cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then dir -= cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then dir -= cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then dir += cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then dir -= Vector3.new(0,1,0) end
+
+        if dir.Magnitude > 0 then dir = dir.Unit end
+
+        FlyBody.bv.Velocity = dir * Settings.FlySpeed
+        FlyBody.bg.CFrame = cam.CFrame
+    end
+end)
+
+-- =========================
+-- VISUALS
+-- =========================
+
+VisualsTab:CreateSection("ESP")
+
+VisualsTab:CreateToggle({
+   Name = "Player ESP",
+   Callback = function(v) Toggles.ESP = v end
+})
+
+connections.esp = RunService.Heartbeat:Connect(function()
+    if Toggles.ESP then
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character then
+                if not p.Character:FindFirstChild("ESP") then
+                    local h = Instance.new("Highlight")
+                    h.Name = "ESP"
+                    h.FillColor = Color3.new(1,0,0)
+                    h.Parent = p.Character
+                end
+            end
+        end
+    end
+end)
+
+-- =========================
+-- TELEPORTS
+-- =========================
+
+TeleportsTab:CreateSection("Coords")
+
 local saved = {}
 
-createButton("Save Position", function()
-	if root then table.insert(saved, root.CFrame) end
-end)
+TeleportsTab:CreateButton({
+    Name = "Save Position",
+    Callback = function()
+        local root = getRoot()
+        if root then
+            table.insert(saved, root.CFrame)
+        end
+    end
+})
 
-createButton("Teleport Slot 1", function()
-	if root and saved[1] then root.CFrame = saved[1] end
-end)
+TeleportsTab:CreateButton({
+    Name = "Teleport Slot 1",
+    Callback = function()
+        local root = getRoot()
+        if root and saved[1] then
+            root.CFrame = saved[1]
+        end
+    end
+})
 
-createButton("Teleport Slot 2", function()
-	if root and saved[2] then root.CFrame = saved[2] end
-end)
+-- =========================
+-- UTIL
+-- =========================
 
--- REJOIN
-createButton("Rejoin Server", function()
-	TeleportService:Teleport(game.PlaceId)
+MainTab:CreateToggle({
+   Name = "Anti AFK",
+   Callback = function(v) Toggles.AntiAFK = v end
+})
+
+LocalPlayer.Idled:Connect(function()
+    if Toggles.AntiAFK then
+        VirtualUser:Button2Down(Vector2.new())
+    end
 end)
 
 -- UI TOGGLE
-local visible = true
-UIS.InputBegan:Connect(function(input,gpe)
-	if not gpe and input.KeyCode == Enum.KeyCode.RightShift then
-		visible = not visible
-		main.Visible = visible
-	end
+UIS.InputBegan:Connect(function(i,g)
+    if not g and i.KeyCode == Enum.KeyCode.RightShift then
+        Rayfield:ToggleUI()
+    end
 end)
+
+Rayfield:LoadConfiguration()
