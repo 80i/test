@@ -31,40 +31,15 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Stats = game:GetService("Stats")
 local VirtualInputManager = game:GetService("VirtualInputManager")
-
-local successVU, VirtualUser = pcall(function() return game:GetService("VirtualUser") end)
-if not successVU then VirtualUser = nil end
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
--- Drawing support
-local Drawing = nil
-pcall(function()
-    Drawing = loadstring(game:HttpGet("https://raw.githubusercontent.com/Anaminhoads/drawinglib/main/lib.lua"))()
-end)
-
--- Tabs
-local MainTab = Window:CreateTab("Main", "swords")
-local CombatTab = Window:CreateTab("Combat", "crosshair")
-local AdvMovementTab = Window:CreateTab("Advanced Movement", "activity")
-local VisualProTab = Window:CreateTab("Visual Pro", "eye")
-local PlayerModsTab = Window:CreateTab("Player Mods", "user")
-local WorldModsTab = Window:CreateTab("World Mods", "globe")
-local TeleportsTab = Window:CreateTab("Teleport System", "map-pin")
-local UtilityTab = Window:CreateTab("Utility", "tool")
-local AutomationTab = Window:CreateTab("Automation", "cpu")
-
 -- State Management
 local Toggles = {}
 local Settings = {}
-local connections = {}
-local tempStates = {}
 local ESPCache = {}
 
 -- Utility Functions
@@ -86,7 +61,7 @@ local function getAllPlayers()
     return Players:GetPlayers()
 end
 
-local function getClosestEnemy(maxDist, teamCheck, visibilityCheck, targetBone)
+local function getClosestEnemy(maxDist, teamCheck, targetBone)
     local best, dist = nil, maxDist or math.huge
     local hrp = getRoot()
     if not hrp then return nil end
@@ -96,8 +71,7 @@ local function getClosestEnemy(maxDist, teamCheck, visibilityCheck, targetBone)
             local char = player.Character
             if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
                 if teamCheck and player.Team == myTeam then continue end
-                local targetPart = targetBone and char:FindFirstChild(targetBone)
-                if not targetPart then targetPart = char.HumanoidRootPart end
+                local targetPart = targetBone and char:FindFirstChild(targetBone) or char.HumanoidRootPart
                 local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
                 if onScreen then
                     local d = (hrp.Position - targetPart.Position).Magnitude
@@ -116,7 +90,6 @@ local function createESP(player)
     if ESPCache[player] then return end
     local highlight = Instance.new("Highlight")
     highlight.Name = "CypherESP"
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     highlight.FillTransparency = Settings.ESPTransparency or 0.5
     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
     highlight.FillColor = Color3.fromRGB(255, 0, 0)
@@ -131,8 +104,9 @@ local function removeESP(player)
     end
 end
 
--- Feature connections
-local aimbotConnection, triggerbotConnection, weaponModConnection, espConnection, movementConnection
+-- Feature Connections
+local aimbotConnection, triggerbotConnection, espConnection, movementConnection
+local FlyBody = nil
 
 local function refreshFeatures()
     -- Aimbot
@@ -140,11 +114,11 @@ local function refreshFeatures()
     if Toggles.Aimbot then
         aimbotConnection = RunService.RenderStepped:Connect(function()
             if not Toggles.Aimbot then return end
-            local target = getClosestEnemy(Settings.AimbotFOV, Toggles.TeamCheck, Toggles.VisibilityCheck, Settings.TargetBone)
-            if target and UserInputService:IsKeyDown(Enum.KeyCode[Settings.LockKeybind]) then
+            local target = getClosestEnemy(Settings.AimbotFOV, Toggles.TeamCheck, Settings.TargetBone)
+            if target and UserInputService:IsKeyDown(Enum.KeyCode[Settings.LockKeybind or "E"]) then
                 local mousePos = UserInputService:GetMouseLocation()
                 local aimPos = target.screenPos
-                local smooth = Settings.AimbotSmoothness * 10
+                local smooth = (Settings.AimbotSmoothness or 1) * 10
                 mousemoverel((aimPos.X - mousePos.X) / smooth, (aimPos.Y - mousePos.Y) / smooth)
             end
         end)
@@ -155,9 +129,9 @@ local function refreshFeatures()
     if Toggles.Triggerbot then
         triggerbotConnection = RunService.RenderStepped:Connect(function()
             if not Toggles.Triggerbot then return end
-            local target = getClosestEnemy(50, Toggles.TeamCheck, false, nil)
+            local target = getClosestEnemy(100, Toggles.TeamCheck, nil)
             if target and Mouse.Target and Mouse.Target:IsDescendantOf(target.player.Character) then
-                task.wait(Settings.TriggerDelay / 1000)
+                task.wait((Settings.TriggerDelay or 0) / 1000)
                 VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
                 task.wait(0.05)
                 VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
@@ -165,44 +139,19 @@ local function refreshFeatures()
         end)
     end
 
-    -- Weapon mods (basic client-side override attempt)
-    if weaponModConnection then weaponModConnection:Disconnect(); weaponModConnection = nil end
-    if Toggles.NoRecoil or Toggles.NoSpread or Toggles.InstantReload or Toggles.InfAmmoClient then
-        weaponModConnection = RunService.RenderStepped:Connect(function()
-            -- In a real script you'd hook into the weapon's update methods
-        end)
-    end
-
-    -- ESP and Chams
+    -- ESP/Chams
     if espConnection then espConnection:Disconnect(); espConnection = nil end
-    if Toggles.BoxESP or Toggles.NameESP or Toggles.HealthESP or Toggles.SkeletonESP or Settings.ChamsType then
+    if Toggles.BoxESP or Toggles.NameESP or Toggles.HealthESP or Toggles.SkeletonESP then
         espConnection = RunService.RenderStepped:Connect(function()
             for _, player in pairs(getAllPlayers()) do
                 if player == LocalPlayer then continue end
                 local char = player.Character
-                if char and char:FindFirstChild("HumanoidRootPart") then
-                    local hrp = getRoot()
-                    local dist = hrp and (hrp.Position - char.HumanoidRootPart.Position).Magnitude or 0
-                    if dist > Settings.ESPMaxDist then continue end
-                    if Toggles.BoxESP or Settings.ChamsType ~= "Solid" then
-                        if not ESPCache[player] then createESP(player) end
-                        local highlight = ESPCache[player]
-                        if highlight then
-                            highlight.FillTransparency = Settings.ESPTransparency
-                            if Settings.ChamsType == "Wireframe" then
-                                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                            else
-                                highlight.DepthMode = Enum.HighlightDepthMode.Occluded
-                            end
-                        end
-                    else
-                        removeESP(player)
-                    end
+                if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+                    if not ESPCache[player] then createESP(player) end
                 else
                     removeESP(player)
                 end
             end
-            -- Clean ESP for disconnected players
             for player, _ in pairs(ESPCache) do
                 if not player.Parent or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
                     removeESP(player)
@@ -213,7 +162,7 @@ local function refreshFeatures()
         for player in pairs(ESPCache) do removeESP(player) end
     end
 
-    -- Movement enhancements
+    -- Movement
     if movementConnection then movementConnection:Disconnect(); movementConnection = nil end
     movementConnection = RunService.Stepped:Connect(function()
         local hum = getHum()
@@ -230,18 +179,23 @@ local function refreshFeatures()
             if hum.FloorMaterial == Enum.Material.Air then
                 local vel = hrp.Velocity
                 if Toggles.AirControl then
-                    local moveDir = (Camera.CFrame.LookVector * (UserInputService:IsKeyDown(Enum.KeyCode.W) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.S) and -1 or 0))
-                                    + Camera.CFrame.RightVector * (UserInputService:IsKeyDown(Enum.KeyCode.D) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.A) and -1 or 0))).unit * 10
-                    hrp.Velocity = vel:Lerp(moveDir, 0.1)
+                    local moveDir = Vector3.zero
+                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir += Camera.CFrame.LookVector end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir -= Camera.CFrame.LookVector end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir += Camera.CFrame.RightVector end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir -= Camera.CFrame.RightVector end
+                    if moveDir.Magnitude > 0 then
+                        moveDir = moveDir.Unit * 10
+                        hrp.Velocity = vel:Lerp(moveDir, 0.1)
+                    end
                 end
-                if Toggles.GlideMode then hrp.Velocity = Vector3.new(vel.X, -1, vel.Z) end
+                if Toggles.GlideMode then hrp.Velocity = Vector3.new(vel.X, -2, vel.Z) end
                 if Toggles.HoverMode then hrp.Velocity = Vector3.new(vel.X, 0, vel.Z) end
             end
         end
     end)
 end
 
--- Helper to attach refresh to toggle callbacks
 local function wrapCallback(original)
     return function(val)
         original(val)
@@ -249,327 +203,225 @@ local function wrapCallback(original)
     end
 end
 
--- ========================================= --
---               MAIN TAB                     --
--- ========================================= --
-local SectionMain = MainTab:CreateSection("Basic Movement Enhancements")
+--=========================================--
+--               TABS & SECTIONS           --
+--=========================================--
+
+-- MAIN TAB
+local MainTab = Window:CreateTab("Main", "swords")
+MainTab:CreateSection("Basic Movement")
 
 Toggles.AutoWalk = false
-MainTab:CreateToggle({
-   Name = "Smart Auto-Walk",
-   CurrentValue = false,
-   Flag = "AutoWalkToggle", 
-   Callback = function(Value) Toggles.AutoWalk = Value end,
-})
+MainTab:CreateToggle({Name = "Auto Walk", CurrentValue = false, Flag = "AutoWalkToggle", Callback = function(v) Toggles.AutoWalk = v end})
 
 Toggles.Noclip = false
-MainTab:CreateToggle({
-   Name = "Ghost Noclip Mode",
-   CurrentValue = false,
-   Flag = "NoclipToggle",
-   Callback = function(Value) Toggles.Noclip = Value end,
-})
+MainTab:CreateToggle({Name = "Noclip", CurrentValue = false, Flag = "NoclipToggle", Callback = function(v) Toggles.Noclip = v end})
 
 Toggles.InfJump = false
-MainTab:CreateToggle({
-   Name = "Infinite Jump",
-   CurrentValue = false,
-   Flag = "InfJumpToggle",
-   Callback = function(Value) Toggles.InfJump = Value end,
-})
+MainTab:CreateToggle({Name = "Infinite Jump", CurrentValue = false, Flag = "InfJumpToggle", Callback = function(v) Toggles.InfJump = v end})
 
 Toggles.Fly = false
 Settings.FlySpeed = 50
-local FlyBody = nil
-MainTab:CreateToggle({
-   Name = "Enable Fly",
-   CurrentValue = false,
-   Flag = "FlyToggle",
-   Callback = function(Value)
-      Toggles.Fly = Value
-      local char, hrp, hum = getChar(), getRoot(), getHum()
-      if not hrp or not hum then return end
-      if Value then
-          local bv = Instance.new("BodyVelocity")
-          bv.Name = "CypherXFly"
-          bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-          bv.Velocity = Vector3.zero
-          bv.Parent = hrp
-          local bg = Instance.new("BodyGyro")
-          bg.Name = "CypherXFlyGyro"
-          bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-          bg.P = 10000
-          bg.CFrame = hrp.CFrame
-          bg.Parent = hrp
-          FlyBody = {bv = bv, bg = bg}
-          hum.PlatformStand = true
-      else
-          if FlyBody then
-              FlyBody.bv:Destroy()
-              FlyBody.bg:Destroy()
-              FlyBody = nil
-          end
-          hum.PlatformStand = false
-      end
-   end,
-})
+MainTab:CreateToggle({Name = "Enable Fly", CurrentValue = false, Flag = "FlyToggle", Callback = function(v)
+    Toggles.Fly = v
+    local hrp = getRoot()
+    local hum = getHum()
+    if not hrp or not hum then return end
+    if v then
+        local bv = Instance.new("BodyVelocity")
+        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bv.Velocity = Vector3.zero
+        bv.Parent = hrp
+        local bg = Instance.new("BodyGyro")
+        bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        bg.P = 10000
+        bg.CFrame = hrp.CFrame
+        bg.Parent = hrp
+        FlyBody = {bv = bv, bg = bg}
+        hum.PlatformStand = true
+    else
+        if FlyBody then FlyBody.bv:Destroy(); FlyBody.bg:Destroy(); FlyBody = nil end
+        hum.PlatformStand = false
+    end
+end})
 
-MainTab:CreateSlider({
-   Name = "Fly Speed",
-   Range = {10, 500},
-   Increment = 1,
-   Suffix = "Speed",
-   CurrentValue = 50,
-   Flag = "FlySpeedSlider",
-   Callback = function(Value) Settings.FlySpeed = Value end,
-})
+MainTab:CreateSlider({Name = "Fly Speed", Range = {10, 500}, Increment = 1, Suffix = "Speed", CurrentValue = 50, Flag = "FlySpeedSlider", Callback = function(v) Settings.FlySpeed = v end})
 
--- ========================================= --
---             COMBAT SYSTEM (updated)        --
--- ========================================= --
-local SectionCombat = CombatTab:CreateSection("Aimbot System")
+-- COMBAT TAB
+local CombatTab = Window:CreateTab("Combat", "crosshair")
+CombatTab:CreateSection("Aimbot")
 
 Toggles.Aimbot = false
 Settings.AimbotSmoothness = 1
 Settings.AimbotFOV = 100
-Settings.AimbotPrediction = 0
 Settings.TargetBone = "Head"
 Toggles.TeamCheck = false
-Toggles.VisibilityCheck = false
 Settings.LockKeybind = "E"
 Toggles.DrawFOV = false
-Toggles.RandomAimOffset = false
 
-CombatTab:CreateToggle({Name = "1. Aimbot Enable", CurrentValue = false, Flag = "AimbotToggle", Callback = wrapCallback(function(v) Toggles.Aimbot = v end)})
-CombatTab:CreateSlider({Name = "2. Aimbot Smoothness", Range = {1, 10}, Increment = 0.1, CurrentValue = 1, Flag = "AimbotSmoothSlider", Callback = function(v) Settings.AimbotSmoothness = v end})
-CombatTab:CreateSlider({Name = "3. Aimbot FOV Radius", Range = {10, 1000}, Increment = 1, CurrentValue = 100, Flag = "AimbotFOVSlider", Callback = function(v) Settings.AimbotFOV = v end})
-CombatTab:CreateSlider({Name = "4. Aimbot Prediction", Range = {0, 10}, Increment = 0.1, CurrentValue = 0, Flag = "AimbotPredSlider", Callback = function(v) Settings.AimbotPrediction = v end})
-CombatTab:CreateDropdown({Name = "5. Target Bone Selector", Options = {"Head", "HumanoidRootPart", "Random"}, CurrentOption = {"Head"}, Flag = "AimbotBoneDrop", Callback = function(v) Settings.TargetBone = v[1] end})
-CombatTab:CreateToggle({Name = "6. Team Check", CurrentValue = false, Flag = "TeamCheckToggle", Callback = function(v) Toggles.TeamCheck = v end})
-CombatTab:CreateToggle({Name = "7. Visibility Check", CurrentValue = false, Flag = "VisCheckToggle", Callback = function(v) Toggles.VisibilityCheck = v end})
-CombatTab:CreateInput({Name = "8. Lock Keybind", PlaceholderText = "E", RemoveTextAfterFocusLost = false, Flag = "LockKeybindInput", Callback = function(t) Settings.LockKeybind = t end})
-CombatTab:CreateToggle({Name = "9. Draw FOV", CurrentValue = false, Flag = "DrawFOVToggle", Callback = function(v) Toggles.DrawFOV = v end})
-CombatTab:CreateToggle({Name = "10. Random Aim Offset", CurrentValue = false, Flag = "RandAimToggle", Callback = function(v) Toggles.RandomAimOffset = v end})
+CombatTab:CreateToggle({Name = "Aimbot Enable", CurrentValue = false, Flag = "AimbotToggle", Callback = wrapCallback(function(v) Toggles.Aimbot = v end)})
+CombatTab:CreateSlider({Name = "Aimbot Smoothness", Range = {1, 10}, Increment = 0.1, CurrentValue = 1, Flag = "AimbotSmoothSlider", Callback = function(v) Settings.AimbotSmoothness = v end})
+CombatTab:CreateSlider({Name = "Aimbot FOV", Range = {10, 1000}, Increment = 1, CurrentValue = 100, Flag = "AimbotFOVSlider", Callback = function(v) Settings.AimbotFOV = v end})
+CombatTab:CreateDropdown({Name = "Target Bone", Options = {"Head", "HumanoidRootPart", "Torso"}, CurrentOption = {"Head"}, Flag = "AimbotBoneDrop", Callback = function(v) Settings.TargetBone = v end})
+CombatTab:CreateToggle({Name = "Team Check", CurrentValue = false, Flag = "TeamCheckToggle", Callback = function(v) Toggles.TeamCheck = v end})
+CombatTab:CreateInput({Name = "Lock Keybind", PlaceholderText = "E", RemoveTextAfterFocusLost = false, Flag = "LockKeybindInput", Callback = function(t) Settings.LockKeybind = t end})
+CombatTab:CreateToggle({Name = "Draw FOV Circle", CurrentValue = false, Flag = "DrawFOVToggle", Callback = function(v) Toggles.DrawFOV = v end})
 
-local SectionSilentAim = CombatTab:CreateSection("Silent Aim")
-Toggles.SilentAim = false
-Settings.HitChance = 100
-Settings.SilentAimFOV = 100
-Settings.BonePriority = "Head"
-Toggles.IgnoreDowned = false
-
-CombatTab:CreateToggle({Name = "11. Silent Aim Enable", CurrentValue = false, Flag = "SilentAimToggle", Callback = wrapCallback(function(v) Toggles.SilentAim = v end)})
-CombatTab:CreateSlider({Name = "12. Hit Chance %", Range = {0, 100}, Increment = 1, CurrentValue = 100, Flag = "HitChanceSlider", Callback = function(v) Settings.HitChance = v end})
-CombatTab:CreateSlider({Name = "13. Silent Aim FOV", Range = {10, 1000}, Increment = 1, CurrentValue = 100, Flag = "SilentAimFOVSlider", Callback = function(v) Settings.SilentAimFOV = v end})
-CombatTab:CreateDropdown({Name = "14. Bone Priority System", Options = {"Head", "Torso", "Limbs"}, CurrentOption = {"Head"}, Flag = "BonePrioDrop", Callback = function(v) Settings.BonePriority = v[1] end})
-CombatTab:CreateToggle({Name = "15. Ignore Downed Targets", CurrentValue = false, Flag = "IgnoreDownedToggle", Callback = function(v) Toggles.IgnoreDowned = v end})
-
-local SectionTriggerbot = CombatTab:CreateSection("Triggerbot")
+CombatTab:CreateSection("Triggerbot")
 Toggles.Triggerbot = false
 Settings.TriggerDelay = 0
-Toggles.BurstMode = false
 
-CombatTab:CreateToggle({Name = "16. Auto Fire on Target (Triggerbot)", CurrentValue = false, Flag = "TriggerbotToggle", Callback = wrapCallback(function(v) Toggles.Triggerbot = v end)})
-CombatTab:CreateSlider({Name = "17. Trigger Delay (ms)", Range = {0, 1000}, Increment = 10, CurrentValue = 0, Flag = "TriggerDelaySlider", Callback = function(v) Settings.TriggerDelay = v end})
-CombatTab:CreateToggle({Name = "18. Burst Mode", CurrentValue = false, Flag = "BurstModeToggle", Callback = function(v) Toggles.BurstMode = v end})
+CombatTab:CreateToggle({Name = "Triggerbot Enable", CurrentValue = false, Flag = "TriggerbotToggle", Callback = wrapCallback(function(v) Toggles.Triggerbot = v end)})
+CombatTab:CreateSlider({Name = "Trigger Delay (ms)", Range = {0, 1000}, Increment = 10, CurrentValue = 0, Flag = "TriggerDelaySlider", Callback = function(v) Settings.TriggerDelay = v end})
 
-local SectionWeapons = CombatTab:CreateSection("Weapon Mods")
+CombatTab:CreateSection("Weapon Mods")
 Toggles.NoRecoil = false
 Toggles.NoSpread = false
-Toggles.InstantReload = false
-Toggles.InfAmmoClient = false
-Settings.FireRateMult = 1
-Settings.BulletSpeedMult = 1
-Toggles.AutoReload = false
-Settings.HitboxExpander = 2
-Settings.DamageMult = 1
-Toggles.RapidTapMode = false
-Toggles.AutoWeaponSwitch = false
-Settings.AimAssistStr = 0
+Toggles.InfAmmo = false
 
-CombatTab:CreateToggle({Name = "19. No Recoil", CurrentValue = false, Flag = "NoRecoilTog", Callback = wrapCallback(function(v) Toggles.NoRecoil = v end)})
-CombatTab:CreateToggle({Name = "20. No Spread", CurrentValue = false, Flag = "NoSpreadTog", Callback = wrapCallback(function(v) Toggles.NoSpread = v end)})
-CombatTab:CreateToggle({Name = "21. Instant Reload", CurrentValue = false, Flag = "InstReloadTog", Callback = wrapCallback(function(v) Toggles.InstantReload = v end)})
-CombatTab:CreateToggle({Name = "22. Infinite Ammo (client)", CurrentValue = false, Flag = "InfAmmoTog", Callback = wrapCallback(function(v) Toggles.InfAmmoClient = v end)})
-CombatTab:CreateSlider({Name = "23. Fire Rate Multiplier", Range = {1, 10}, Increment = 0.5, CurrentValue = 1, Flag = "FireRateSli", Callback = function(v) Settings.FireRateMult = v end})
-CombatTab:CreateSlider({Name = "24. Bullet Speed Multiplier", Range = {1, 10}, Increment = 0.5, CurrentValue = 1, Flag = "BulletSpeedSli", Callback = function(v) Settings.BulletSpeedMult = v end})
-CombatTab:CreateToggle({Name = "25. Auto Reload", CurrentValue = false, Flag = "AutoReloadTog", Callback = function(v) Toggles.AutoReload = v end})
-CombatTab:CreateSlider({Name = "26. Hitbox Expander (size)", Range = {2, 50}, Increment = 1, CurrentValue = 2, Flag = "HitboxExpSli", Callback = function(v) Settings.HitboxExpander = v end})
-CombatTab:CreateSlider({Name = "27. Damage Multiplier (client)", Range = {1, 100}, Increment = 1, CurrentValue = 1, Flag = "DmgMultSli", Callback = function(v) Settings.DamageMult = v end})
-CombatTab:CreateToggle({Name = "28. Rapid Tap Mode", CurrentValue = false, Flag = "RapidTapTog", Callback = function(v) Toggles.RapidTapMode = v end})
-CombatTab:CreateToggle({Name = "29. Auto Weapon Switch", CurrentValue = false, Flag = "AutoWepTog", Callback = function(v) Toggles.AutoWeaponSwitch = v end})
-CombatTab:CreateSlider({Name = "30. Aim Assist Strength", Range = {0, 100}, Increment = 1, CurrentValue = 0, Flag = "AimAssistSli", Callback = function(v) Settings.AimAssistStr = v end})
+CombatTab:CreateToggle({Name = "No Recoil", CurrentValue = false, Flag = "NoRecoilTog", Callback = function(v) Toggles.NoRecoil = v end})
+CombatTab:CreateToggle({Name = "No Spread", CurrentValue = false, Flag = "NoSpreadTog", Callback = function(v) Toggles.NoSpread = v end})
+CombatTab:CreateToggle({Name = "Infinite Ammo", CurrentValue = false, Flag = "InfAmmoTog", Callback = function(v) Toggles.InfAmmo = v end})
 
--- ========================================= --
---           ADVANCED MOVEMENT (updated)      --
--- ========================================= --
-local SectionAdvMov = AdvMovementTab:CreateSection("Advanced Movement Configs")
+-- ADVANCED MOVEMENT TAB
+local AdvMovementTab = Window:CreateTab("Movement", "activity")
+AdvMovementTab:CreateSection("Movement Mods")
 
-Settings.WalkSpeed = 16
-Settings.SprintMult = 1.5
-Settings.AccelControl = 1
-Settings.DecelControl = 1
-Toggles.AirControl = false
 Toggles.AutoBhop = false
-Settings.StrafeBoost = 1
+Toggles.AirControl = false
 Toggles.GlideMode = false
 Toggles.HoverMode = false
-Toggles.WallWalk = false
-Settings.LadderSpeed = 1
-Settings.ClimbSpeedMult = 1
-Settings.DashDist = 50
-Settings.DashCooldown = 1
-Toggles.OmniDash = false
-Toggles.AntiFallDmg = false
-Toggles.AntiKnockback = false
-Settings.KnockbackMult = 1
-Toggles.PlatformLock = false
-Settings.StepHeight = 2
-Toggles.JumpDelayRem = false
-Settings.MultiJump = 1
-Toggles.SlideMovement = false
-Toggles.IcePhysics = false
-Settings.FrictionMod = 1
-Toggles.MoveCorrection = false
+Settings.WalkSpeed = 16
 
-AdvMovementTab:CreateSlider({Name = "WalkSpeed Override", Range = {16, 500}, Increment = 1, CurrentValue = 16, Flag = "WalkSpeedSlider", Callback = function(v) Settings.WalkSpeed = v end})
-AdvMovementTab:CreateSlider({Name = "31. Sprint Multiplier", Range = {1, 5}, Increment = 0.1, CurrentValue = 1.5, Flag = "SprintMultSli", Callback = function(v) Settings.SprintMult = v end})
-AdvMovementTab:CreateSlider({Name = "32. Acceleration Control", Range = {0.1, 10}, Increment = 0.1, CurrentValue = 1, Flag = "AccelSli", Callback = function(v) Settings.AccelControl = v end})
-AdvMovementTab:CreateSlider({Name = "33. Deceleration Control", Range = {0.1, 10}, Increment = 0.1, CurrentValue = 1, Flag = "DecelSli", Callback = function(v) Settings.DecelControl = v end})
-AdvMovementTab:CreateToggle({Name = "34. Air Control Boost", CurrentValue = false, Flag = "AirCtrlTog", Callback = wrapCallback(function(v) Toggles.AirControl = v end)})
-AdvMovementTab:CreateToggle({Name = "35. Auto Bunny Hop", CurrentValue = false, Flag = "AutoBhopTog", Callback = wrapCallback(function(v) Toggles.AutoBhop = v end)})
-AdvMovementTab:CreateSlider({Name = "36. Strafe Speed Boost", Range = {1, 5}, Increment = 0.1, CurrentValue = 1, Flag = "StrafeSli", Callback = function(v) Settings.StrafeBoost = v end})
-AdvMovementTab:CreateToggle({Name = "37. Glide Mode", CurrentValue = false, Flag = "GlideTog", Callback = wrapCallback(function(v) Toggles.GlideMode = v end)})
-AdvMovementTab:CreateToggle({Name = "38. Hover Mode", CurrentValue = false, Flag = "HoverTog", Callback = wrapCallback(function(v) Toggles.HoverMode = v end)})
-AdvMovementTab:CreateToggle({Name = "39. Wall Walk", CurrentValue = false, Flag = "WallWalkTog", Callback = function(v) Toggles.WallWalk = v end})
-AdvMovementTab:CreateSlider({Name = "40. Ladder Speed Boost", Range = {1, 5}, Increment = 0.1, CurrentValue = 1, Flag = "LadderSli", Callback = function(v) Settings.LadderSpeed = v end})
-AdvMovementTab:CreateSlider({Name = "41. Climb Speed Multiplier", Range = {1, 10}, Increment = 0.1, CurrentValue = 1, Flag = "ClimbSli", Callback = function(v) Settings.ClimbSpeedMult = v end})
-AdvMovementTab:CreateSlider({Name = "42. Dash Distance Control", Range = {10, 500}, Increment = 10, CurrentValue = 50, Flag = "DashDistSli", Callback = function(v) Settings.DashDist = v end})
-AdvMovementTab:CreateSlider({Name = "43. Dash Cooldown Control", Range = {0, 10}, Increment = 0.5, CurrentValue = 1, Flag = "DashCDSli", Callback = function(v) Settings.DashCooldown = v end})
-AdvMovementTab:CreateToggle({Name = "44. Omni Direction Dash", CurrentValue = false, Flag = "OmniDashTog", Callback = function(v) Toggles.OmniDash = v end})
-AdvMovementTab:CreateToggle({Name = "45. Anti Fall Damage", CurrentValue = false, Flag = "AntiFallTog", Callback = function(v) Toggles.AntiFallDmg = v end})
-AdvMovementTab:CreateToggle({Name = "46. Anti Knockback", CurrentValue = false, Flag = "AntiKBTog", Callback = function(v) Toggles.AntiKnockback = v end})
-AdvMovementTab:CreateSlider({Name = "47. Knockback Multiplier", Range = {0, 10}, Increment = 0.1, CurrentValue = 1, Flag = "KBMultSli", Callback = function(v) Settings.KnockbackMult = v end})
-AdvMovementTab:CreateToggle({Name = "48. Platform Lock Stabilizer", CurrentValue = false, Flag = "PlatLockTog", Callback = function(v) Toggles.PlatformLock = v end})
-AdvMovementTab:CreateSlider({Name = "49. Step Height Modifier", Range = {2, 50}, Increment = 1, CurrentValue = 2, Flag = "StepSli", Callback = function(v) Settings.StepHeight = v end})
-AdvMovementTab:CreateToggle({Name = "50. Jump Delay Removal", CurrentValue = false, Flag = "JumpDelTog", Callback = function(v) Toggles.JumpDelayRem = v end})
-AdvMovementTab:CreateSlider({Name = "51. Multi Jump Count", Range = {1, 100}, Increment = 1, CurrentValue = 1, Flag = "MultiJumpSli", Callback = function(v) Settings.MultiJump = v end})
-AdvMovementTab:CreateToggle({Name = "52. Slide Movement System", CurrentValue = false, Flag = "SlideTog", Callback = function(v) Toggles.SlideMovement = v end})
-AdvMovementTab:CreateToggle({Name = "53. Ice Physics Mode", CurrentValue = false, Flag = "IceTog", Callback = function(v) Toggles.IcePhysics = v end})
-AdvMovementTab:CreateSlider({Name = "54. Friction Modifier", Range = {0, 2}, Increment = 0.1, CurrentValue = 1, Flag = "FrictionSli", Callback = function(v) Settings.FrictionMod = v end})
-AdvMovementTab:CreateToggle({Name = "55. Movement Correction System", CurrentValue = false, Flag = "MoveCorrTog", Callback = function(v) Toggles.MoveCorrection = v end})
+AdvMovementTab:CreateSlider({Name = "WalkSpeed", Range = {16, 500}, Increment = 1, CurrentValue = 16, Flag = "WalkSpeedSlider", Callback = function(v) Settings.WalkSpeed = v end})
+AdvMovementTab:CreateToggle({Name = "Auto Bunny Hop", CurrentValue = false, Flag = "AutoBhopTog", Callback = wrapCallback(function(v) Toggles.AutoBhop = v end)})
+AdvMovementTab:CreateToggle({Name = "Air Control", CurrentValue = false, Flag = "AirCtrlTog", Callback = wrapCallback(function(v) Toggles.AirControl = v end)})
+AdvMovementTab:CreateToggle({Name = "Glide Mode", CurrentValue = false, Flag = "GlideTog", Callback = wrapCallback(function(v) Toggles.GlideMode = v end)})
+AdvMovementTab:CreateToggle({Name = "Hover Mode", CurrentValue = false, Flag = "HoverTog", Callback = wrapCallback(function(v) Toggles.HoverMode = v end)})
 
+-- VISUAL PRO TAB
+local VisualTab = Window:CreateTab("Visuals", "eye")
+VisualTab:CreateSection("ESP")
 
--- ========================================= --
---               VISUAL PRO (updated)         --
--- ========================================= --
-local SectionVisualESP = VisualProTab:CreateSection("ESP Enhancements")
 Toggles.BoxESP = false
 Toggles.NameESP = false
-Toggles.HealthESP = false
-Toggles.DistanceESP = false
-Toggles.SkeletonESP = false
-Settings.ChamsType = "Solid"
-Toggles.TeamColorESP = false
-Toggles.RainbowESP = false
 Settings.ESPTransparency = 0.5
-Settings.ESPMaxDist = 2000
 
-VisualProTab:CreateToggle({Name = "56. Box ESP", CurrentValue = false, Flag = "BoxESPTog", Callback = wrapCallback(function(v) Toggles.BoxESP = v end)})
-VisualProTab:CreateToggle({Name = "57. Name ESP", CurrentValue = false, Flag = "NameESPTog", Callback = wrapCallback(function(v) Toggles.NameESP = v end)})
-VisualProTab:CreateToggle({Name = "58. Health ESP", CurrentValue = false, Flag = "HealthESPTog", Callback = wrapCallback(function(v) Toggles.HealthESP = v end)})
-VisualProTab:CreateToggle({Name = "59. Distance ESP", CurrentValue = false, Flag = "DistESPTog", Callback = wrapCallback(function(v) Toggles.DistanceESP = v end)})
-VisualProTab:CreateToggle({Name = "60. Skeleton ESP", CurrentValue = false, Flag = "SkelESPTog", Callback = wrapCallback(function(v) Toggles.SkeletonESP = v end)})
-VisualProTab:CreateDropdown({Name = "61. Chams (Solid/Wireframe)", Options = {"Solid", "Wireframe"}, CurrentOption = {"Solid"}, Flag = "ChamsDrop", Callback = function(v) Settings.ChamsType = v[1]; refreshFeatures() end})
-VisualProTab:CreateToggle({Name = "62. Team Color ESP", CurrentValue = false, Flag = "TeamESPTog", Callback = function(v) Toggles.TeamColorESP = v end})
-VisualProTab:CreateToggle({Name = "63. Rainbow ESP", CurrentValue = false, Flag = "RainbowESPTog", Callback = function(v) Toggles.RainbowESP = v end})
-VisualProTab:CreateSlider({Name = "64. ESP Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Flag = "ESPTransSli", Callback = function(v) Settings.ESPTransparency = v end})
-VisualProTab:CreateSlider({Name = "65. ESP Max Distance", Range = {100, 10000}, Increment = 100, CurrentValue = 2000, Flag = "ESPMaxDistSli", Callback = function(v) Settings.ESPMaxDist = v end})
+VisualTab:CreateToggle({Name = "Box ESP", CurrentValue = false, Flag = "BoxESPTog", Callback = wrapCallback(function(v) Toggles.BoxESP = v end)})
+VisualTab:CreateToggle({Name = "Name ESP", CurrentValue = false, Flag = "NameESPTog", Callback = wrapCallback(function(v) Toggles.NameESP = v end)})
+VisualTab:CreateSlider({Name = "ESP Transparency", Range = {0, 1}, Increment = 0.1, CurrentValue = 0.5, Flag = "ESPTransSli", Callback = function(v) Settings.ESPTransparency = v end})
 
-local SectionCamera = VisualProTab:CreateSection("Camera / FOV")
-Settings.CustomFOV = 70
-Toggles.FOVUnlock = false
-Settings.ZoomSpeed = 1
-Settings.CameraOffset = "0,0,0"
-Toggles.ThirdPerson = false
-Settings.CamSmooth = 1
-Toggles.CamShakeRem = false
-Toggles.Freecam = false
-Settings.FreecamSpeed = 1
-Settings.FreecamRot = 1
-
-VisualProTab:CreateSlider({Name = "66. Custom FOV Slider", Range = {10, 120}, Increment = 1, CurrentValue = 70, Flag = "CusFOVSli", Callback = function(v) Settings.CustomFOV = v end})
-VisualProTab:CreateToggle({Name = "67. FOV Unlock", CurrentValue = false, Flag = "FOVUnlTog", Callback = function(v) Toggles.FOVUnlock = v end})
-VisualProTab:CreateSlider({Name = "68. Zoom Speed Control", Range = {1, 10}, Increment = 0.5, CurrentValue = 1, Flag = "ZoomSli", Callback = function(v) Settings.ZoomSpeed = v end})
-VisualProTab:CreateInput({Name = "69. Camera Offset (x,y,z)", PlaceholderText = "0,0,0", RemoveTextAfterFocusLost = false, Flag = "CamOffsetInput", Callback = function(t) Settings.CameraOffset = t end})
-VisualProTab:CreateToggle({Name = "70. Third Person Mode", CurrentValue = false, Flag = "ThirdPTog", Callback = function(v) Toggles.ThirdPerson = v end})
-VisualProTab:CreateSlider({Name = "71. Camera Smoothing", Range = {1, 10}, Increment = 0.1, CurrentValue = 1, Flag = "CamSmoothSli", Callback = function(v) Settings.CamSmooth = v end})
-VisualProTab:CreateToggle({Name = "72. Camera Shake Removal", CurrentValue = false, Flag = "CamShakeTog", Callback = function(v) Toggles.CamShakeRem = v end})
-VisualProTab:CreateToggle({Name = "73. Freecam Mode", CurrentValue = false, Flag = "FreecamTog", Callback = function(v) Toggles.Freecam = v end})
-VisualProTab:CreateSlider({Name = "74. Freecam Speed", Range = {1, 10}, Increment = 0.1, CurrentValue = 1, Flag = "FreeSpdSli", Callback = function(v) Settings.FreecamSpeed = v end})
-VisualProTab:CreateSlider({Name = "75. Freecam Rotation Speed", Range = {1, 10}, Increment = 0.1, CurrentValue = 1, Flag = "FreeRotSli", Callback = function(v) Settings.FreecamRot = v end})
-
-local SectionEnv = VisualProTab:CreateSection("Environment")
+VisualTab:CreateSection("Environment")
 Toggles.Fullbright = false
 Toggles.NightMode = false
-Toggles.RemFog = false
-Settings.Skybox = "Default"
-Settings.TimeChange = 12
-Settings.Saturation = 1
-Settings.Contrast = 1
-Settings.Bloom = 1
-Settings.AmbientColor = "255,255,255"
-Settings.ShadowInt = 1
 
-VisualProTab:CreateToggle({Name = "76. Fullbright Pro", CurrentValue = false, Flag = "FBTog", Callback = function(v) Toggles.Fullbright = v end})
-VisualProTab:CreateToggle({Name = "77. Night Mode", CurrentValue = false, Flag = "NightTog", Callback = function(v) Toggles.NightMode = v end})
-VisualProTab:CreateToggle({Name = "78. Remove Fog", CurrentValue = false, Flag = "FogTog", Callback = function(v) Toggles.RemFog = v end})
-VisualProTab:CreateDropdown({Name = "79. Skybox Changer", Options = {"Default", "Galaxy", "Vaporwave", "Red"}, CurrentOption = {"Default"}, Flag = "SkyDrop", Callback = function(v) Settings.Skybox = v[1] end})
-VisualProTab:CreateSlider({Name = "80. Time Changer", Range = {0, 24}, Increment = 1, CurrentValue = 12, Flag = "TimeSli", Callback = function(v) Settings.TimeChange = v; if Lighting then Lighting.ClockTime = v end end})
-VisualProTab:CreateSlider({Name = "81. Saturation Control", Range = {0, 5}, Increment = 0.1, CurrentValue = 1, Flag = "SatSli", Callback = function(v) Settings.Saturation = v end})
-VisualProTab:CreateSlider({Name = "82. Contrast Control", Range = {0, 5}, Increment = 0.1, CurrentValue = 1, Flag = "ConSli", Callback = function(v) Settings.Contrast = v end})
-VisualProTab:CreateSlider({Name = "83. Bloom Control", Range = {0, 5}, Increment = 0.1, CurrentValue = 1, Flag = "BloomSli", Callback = function(v) Settings.Bloom = v end})
-VisualProTab:CreateInput({Name = "84. Ambient Color Override", PlaceholderText = "255,255,255", RemoveTextAfterFocusLost = false, Flag = "AmbientColorInput", Callback = function(t) Settings.AmbientColor = t end})
-VisualProTab:CreateSlider({Name = "85. Shadow Intensity", Range = {0, 1}, Increment = 0.1, CurrentValue = 1, Flag = "ShadowSli", Callback = function(v) Settings.ShadowInt = v; if Lighting then Lighting.ShadowSoftness = v end end})
+VisualTab:CreateToggle({Name = "Fullbright", CurrentValue = false, Flag = "FBTog", Callback = function(v)
+    Toggles.Fullbright = v
+    if v then
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 14
+        Lighting.FogEnd = 100000
+        Lighting.GlobalShadows = false
+    else
+        Lighting.Brightness = 1
+        Lighting.ClockTime = 12
+        Lighting.FogEnd = 1000
+        Lighting.GlobalShadows = true
+    end
+end})
+VisualTab:CreateToggle({Name = "Night Mode", CurrentValue = false, Flag = "NightTog", Callback = function(v)
+    Toggles.NightMode = v
+    if v then
+        Lighting.Brightness = 0.3
+        Lighting.ClockTime = 0
+    else
+        Lighting.Brightness = 1
+        Lighting.ClockTime = 12
+    end
+end})
 
--- ========================================= --
---              PLAYER MODS (update as needed)--
--- ========================================= --
--- (Keep existing PlayerMods, WorldMods, Teleport, Utility, Automation sections unchanged; they're already functional with variables and some loops.)
+-- PLAYER MODS TAB
+local PlayerTab = Window:CreateTab("Player", "user")
+PlayerTab:CreateSection("Character")
 
--- ========================================= --
---               LOOPS                        --
--- ========================================= --
+Toggles.Godmode = false
+Toggles.AntiVoid = false
+
+PlayerTab:CreateToggle({Name = "Godmode", CurrentValue = false, Flag = "GodTog", Callback = function(v) Toggles.Godmode = v end})
+PlayerTab:CreateToggle({Name = "Anti Void", CurrentValue = false, Flag = "AntiVoidTog", Callback = function(v) Toggles.AntiVoid = v end})
+
+-- WORLD MODS TAB
+local WorldTab = Window:CreateTab("World", "globe")
+WorldTab:CreateSection("Environment")
+
+Settings.Gravity = 196
+WorldTab:CreateSlider({Name = "Gravity", Range = {0, 1000}, Increment = 1, CurrentValue = 196, Flag = "GravSli", Callback = function(v) Settings.Gravity = v; Workspace.Gravity = v end})
+
+-- TELEPORT TAB
+local TeleportTab = Window:CreateTab("Teleports", "map-pin")
+TeleportTab:CreateSection("Teleport")
+
+local savedPositions = {
+    ["Spawn"] = Vector3.new(0, 50, 0)
+}
+local selectedLocation = "Spawn"
+
+TeleportTab:CreateButton({Name = "Save Position", Callback = function()
+    local hrp = getRoot()
+    if hrp then
+        local name = "Pos_" .. math.random(1000, 9999)
+        savedPositions[name] = hrp.Position
+        Rayfield:Notify({Title = "Saved", Content = name, Duration = 3})
+    end
+end})
+
+TeleportTab:CreateButton({Name = "Teleport to Spawn", Callback = function()
+    local hrp = getRoot()
+    if hrp and savedPositions["Spawn"] then
+        hrp.CFrame = CFrame.new(savedPositions["Spawn"])
+    end
+end})
+
+-- UTILITY TAB
+local UtilTab = Window:CreateTab("Utility", "tool")
+UtilTab:CreateSection("Utility")
+
+Toggles.AntiAFK = false
+UtilTab:CreateToggle({Name = "Anti AFK", CurrentValue = false, Flag = "AntiAFKTog", Callback = function(v) Toggles.AntiAFK = v end})
+
+--=========================================--
+--               LOOPS                     --
+--=========================================--
 local fovCircle = nil
 pcall(function()
-    if Drawing and Drawing.new then
+    local Drawing = loadstring(game:HttpGet("https://raw.githubusercontent.com/Anaminhoads/drawinglib/main/lib.lua"))()
+    if Drawing then
         fovCircle = Drawing.new("Circle")
-        if fovCircle then
-            fovCircle.Visible = false
-            fovCircle.Thickness = 2
-            fovCircle.Color = Color3.fromRGB(255, 255, 255)
-            fovCircle.Filled = false
-            fovCircle.Transparency = 1
-        end
+        fovCircle.Visible = false
+        fovCircle.Thickness = 2
+        fovCircle.Color = Color3.fromRGB(255, 255, 255)
+        fovCircle.Filled = false
+        fovCircle.Transparency = 1
     end
 end)
 
-connections.main = RunService.RenderStepped:Connect(function()
-    local char, hrp, hum = getChar(), getRoot(), getHum()
-    
+RunService.RenderStepped:Connect(function()
+    local hum = getHum()
+    local hrp = getRoot()
+
     -- WalkSpeed
-    if hum and hum.WalkSpeed ~= Settings.WalkSpeed then
+    if hum and Settings.WalkSpeed then
         hum.WalkSpeed = Settings.WalkSpeed
     end
-    
+
     -- AutoWalk
     if Toggles.AutoWalk and hum then
         hum:Move(Vector3.new(1, 0, 0), true)
     end
-    
+
     -- FOV Circle
     if fovCircle then
-        if Toggles.DrawFOV then
+        if Toggles.DrawFOV and Settings.AimbotFOV then
             fovCircle.Visible = true
             fovCircle.Position = UserInputService:GetMouseLocation()
             fovCircle.Radius = Settings.AimbotFOV
@@ -577,22 +429,21 @@ connections.main = RunService.RenderStepped:Connect(function()
             fovCircle.Visible = false
         end
     end
-    
+
     -- Fly
     if Toggles.Fly and FlyBody and hrp then
         local moveDir = Vector3.zero
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir += Camera.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir -= Camera.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir -= Camera.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir += Camera.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir += Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir -= Vector3.new(0, 1, 0) end
         if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
-        
-        FlyBody.bv.Velocity = moveDir * Settings.FlySpeed
+        FlyBody.bv.Velocity = moveDir * (Settings.FlySpeed or 50)
         FlyBody.bg.CFrame = Camera.CFrame
     end
-    
+
     -- Godmode
     if Toggles.Godmode and hum then
         if hum.Health < hum.MaxHealth then
@@ -601,18 +452,19 @@ connections.main = RunService.RenderStepped:Connect(function()
     end
 end)
 
-connections.stepped = RunService.Stepped:Connect(function()
-    local char, hrp, hum = getChar(), getRoot(), getHum()
-    
+RunService.Stepped:Connect(function()
+    local char = getChar()
+    local hrp = getRoot()
+
     -- Noclip
     if Toggles.Noclip and char then
         for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide then
+            if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
     end
-    
+
     -- Anti Void
     if Toggles.AntiVoid and hrp then
         if hrp.Position.Y < -50 then
@@ -621,7 +473,7 @@ connections.stepped = RunService.Stepped:Connect(function()
     end
 end)
 
-connections.infjump = UserInputService.JumpRequest:Connect(function()
+UserInputService.JumpRequest:Connect(function()
     if Toggles.InfJump then
         local hum = getHum()
         if hum then
@@ -630,9 +482,18 @@ connections.infjump = UserInputService.JumpRequest:Connect(function()
     end
 end)
 
--- Activate all feature models
+-- Anti AFK
+LocalPlayer.Idled:Connect(function()
+    if Toggles.AntiAFK then
+        local VirtualUser = game:GetService("VirtualUser")
+        VirtualUser:Button2Down(Vector2.new(0, 0), Camera.CFrame)
+        task.wait(1)
+        VirtualUser:Button2Up(Vector2.new(0, 0), Camera.CFrame)
+    end
+end)
+
+-- Initialize features
 refreshFeatures()
 
--- Initial load config
+-- Load config
 Rayfield:LoadConfiguration()
-Rayfield:Notify({Title="CypherX Hub Loaded", Content="150+ Features Activated", Duration=5, Image="info"})
