@@ -4,16 +4,15 @@ local player = game:GetService("Players").LocalPlayer
 local runService = game:GetService("RunService")
 local tweenService = game:GetService("TweenService")
 
--- Main ScreenGui Setup
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PremiumEscapeHub"
 ScreenGui.ResetOnSpawn = false
 local success, _ = pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
 if not success then ScreenGui.Parent = player:WaitForChild("PlayerGui") end
 
--- MAIN WINDOW CONTAINER
+-- WIDER MAIN WINDOW (500px wide)
 local MainWindow = Instance.new("Frame")
-MainWindow.Size = UDim2.new(0, 480, 0, 300)
+MainWindow.Size = UDim2.new(0, 500, 0, 300)
 MainWindow.Position = UDim2.new(0.25, 0, 0.3, 0)
 MainWindow.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
 MainWindow.BorderSizePixel = 0
@@ -38,7 +37,6 @@ TitleBar.Parent = MainWindow
 local titleCorner = Instance.new("UICorner", TitleBar)
 titleCorner.CornerRadius = UDim.new(0, 12)
 
--- Visual fix to keep bottom of TitleBar flat
 local titleFlat = Instance.new("Frame")
 titleFlat.Size = UDim2.new(1, 0, 0, 10)
 titleFlat.Position = UDim2.new(0, 0, 1, -10)
@@ -57,7 +55,7 @@ TitleText.TextXAlignment = Enum.TextXAlignment.Left
 TitleText.BackgroundTransparency = 1
 TitleText.Parent = TitleBar
 
--- SIDEBAR (LEFT NAV)
+-- SIDEBAR
 local SideBar = Instance.new("Frame")
 SideBar.Size = UDim2.new(0, 130, 1, -40)
 SideBar.Position = UDim2.new(0, 0, 0, 40)
@@ -72,28 +70,31 @@ sideLine.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
 sideLine.BorderSizePixel = 0
 sideLine.Parent = SideBar
 
--- CONTAINER FOR PAGES
-local PageContainer = Instance.new("Frame")
+-- SCROLLING CONTAINER FOR PAGES (Prevents missing/cut-off elements)
+local PageContainer = Instance.new("ScrollingFrame")
 PageContainer.Size = UDim2.new(1, -130, 1, -40)
 PageContainer.Position = UDim2.new(0, 130, 0, 40)
 PageContainer.BackgroundTransparency = 1
+PageContainer.BorderSizePixel = 0
+PageContainer.CanvasSize = UDim2.new(0, 0, 0, 320) -- Allows vertical scrolling if items overflow
+PageContainer.ScrollBarThickness = 4
+PageContainer.ScrollBarImageColor3 = Color3.fromRGB(50, 50, 60)
 PageContainer.Parent = MainWindow
 
--- PAGE 1: Main Cheats
+-- PAGES
 local MainPage = Instance.new("Frame")
 MainPage.Size = UDim2.new(1, 0, 1, 0)
 MainPage.BackgroundTransparency = 1
 MainPage.Visible = true
 MainPage.Parent = PageContainer
 
--- PAGE 2: Teleports
 local TeleportPage = Instance.new("Frame")
 TeleportPage.Size = UDim2.new(1, 0, 1, 0)
 TeleportPage.BackgroundTransparency = 1
 TeleportPage.Visible = false
 TeleportPage.Parent = PageContainer
 
--- TAB CLICKS LOGIC
+-- TAB NAVIGATION
 local function switchTab(showPage, hidePage, activeBtn, inactiveBtn)
     showPage.Visible = true
     hidePage.Visible = false
@@ -103,7 +104,6 @@ local function switchTab(showPage, hidePage, activeBtn, inactiveBtn)
     inactiveBtn.TextColor3 = Color3.fromRGB(150, 150, 160)
 end
 
--- SIDEBAR BUTTONS
 local MainTabBtn = Instance.new("TextButton")
 MainTabBtn.Size = UDim2.new(0.9, 0, 0, 35)
 MainTabBtn.Position = UDim2.new(0.05, 0, 0, 15)
@@ -131,7 +131,7 @@ Instance.new("UICorner", TeleportTabBtn).CornerRadius = UDim.new(0, 6)
 MainTabBtn.MouseButton1Click:Connect(function() switchTab(MainPage, TeleportPage, MainTabBtn, TeleportTabBtn) end)
 TeleportTabBtn.MouseButton1Click:Connect(function() switchTab(TeleportPage, MainPage, TeleportTabBtn, MainTabBtn) end)
 
--- IN-GAME NOTIFICATION TOAST
+-- NOTIFICATIONS
 local function showNotification(message, color)
     local Notif = Instance.new("TextLabel")
     Notif.Size = UDim2.new(0, 200, 0, 35)
@@ -155,11 +155,11 @@ local function showNotification(message, color)
     fade.Completed:Connect(function() Notif:Destroy() end)
 end
 
--- RENDERING UTILITY FOR CHEAT TOGGLES
+-- TOGGLE RENDERER
 local function createFeatureToggle(text, yPos, parentPage)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0.9, 0, 0, 45)
-    frame.Position = UDim2.new(0.05, 0, 0, yPos)
+    frame.Size = UDim2.new(0.95, 0, 0, 45)
+    frame.Position = UDim2.new(0.025, 0, 0, yPos)
     frame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
     frame.BorderSizePixel = 0
     frame.Parent = parentPage
@@ -191,15 +191,15 @@ local function createFeatureToggle(text, yPos, parentPage)
     return btn
 end
 
--- CONFIGURING MODULES (MAIN TAB)
+-- MODULES (Main Tab) - Moved closer together (15, 65, 115)
 local AutoWalkBtn = createFeatureToggle("⚡ Smart Auto-Walk", 15, MainPage)
-local SpeedBtn = createFeatureToggle("💨 Hyper Speed (150)", 70, MainPage)
-local NoclipBtn = createFeatureToggle("🧱 Ghost Noclip Mode", 125, MainPage)
+local SpeedBtn = createFeatureToggle("💨 Hyper Speed (150)", 65, MainPage)
+local NoclipBtn = createFeatureToggle("🧱 Ghost Noclip Mode", 115, MainPage)
 
--- CONFIGURING MODULES (TELEPORT TAB)
+-- MODULES (Teleport Tab)
 local TeleportBtn = Instance.new("TextButton")
-TeleportBtn.Size = UDim2.new(0.9, 0, 0, 45)
-TeleportBtn.Position = UDim2.new(0.05, 0, 0, 15)
+TeleportBtn.Size = UDim2.new(0.95, 0, 0, 45)
+TeleportBtn.Position = UDim2.new(0.025, 0, 0, 15)
 TeleportBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
 TeleportBtn.Text = "TELEPORT TO THE END STAGE"
 TeleportBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -209,7 +209,7 @@ TeleportBtn.BorderSizePixel = 0
 TeleportBtn.Parent = TeleportPage
 Instance.new("UICorner", TeleportBtn).CornerRadius = UDim.new(0, 6)
 
--- LOGIC FOR IMPLEMENTED ACTIONS
+-- LOGIC UTILITIES
 local destination = Vector3.new(7986.58, 718.30, 5143.11)
 TeleportBtn.MouseButton1Click:Connect(function()
     local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
